@@ -147,39 +147,43 @@
 
 .c0 {
   background:
+    radial-gradient(circle at 50% 50%, var(--candy-0b) 12%, transparent 14%),
     repeating-conic-gradient(
       from 0deg,
-      var(--candy-0b) 0deg 30deg,
-      var(--candy-0) 30deg 60deg
+      var(--candy-0b) 0deg 15deg,
+      var(--candy-0) 15deg 30deg
     );
 }
 .c1 {
   border-radius: 45% 45% 45% 45% / 60% 60% 40% 40%;
-  background: linear-gradient(150deg, var(--candy-1b), var(--candy-1));
+  background:
+    radial-gradient(ellipse at 35% 25%, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(150deg, var(--candy-1b), var(--candy-1));
 }
 .c2 {
-  border-radius: 30%;
-  background: linear-gradient(150deg, var(--candy-2b), var(--candy-2));
+  border-radius: 32%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.4) 10%, transparent 12%),
+    linear-gradient(45deg, transparent 45%, rgba(255, 255, 255, 0.25) 45% 55%, transparent 55%),
+    linear-gradient(-45deg, transparent 45%, rgba(255, 255, 255, 0.25) 45% 55%, transparent 55%),
+    linear-gradient(150deg, var(--candy-2b), var(--candy-2));
 }
 .c3 {
-  border-radius: 50% 50% 45% 45%;
-  background: radial-gradient(circle at 34% 28%, var(--candy-3b), var(--candy-3) 70%);
+  border-radius: 50% 50% 42% 42% / 60% 60% 40% 40%;
+  background:
+    radial-gradient(circle at 50% 65%, rgba(255, 255, 255, 0.25) 15%, transparent 35%),
+    radial-gradient(circle at 50% 65%, transparent 45%, rgba(255, 255, 255, 0.25) 45% 55%, transparent 55%),
+    radial-gradient(circle at 34% 28%, var(--candy-3b), var(--candy-3) 75%);
 }
 .c4 {
   background:
-    repeating-conic-gradient(
-      from 20deg,
-      var(--candy-4b) 0deg 45deg,
-      var(--candy-4) 45deg 90deg
-    );
+    radial-gradient(circle at 50% 50%, var(--candy-4b) 15%, transparent 18%),
+    repeating-conic-gradient(from 15deg, var(--candy-4b) 0deg 30deg, var(--candy-4) 30deg 60deg);
 }
 .c5 {
   background:
-    repeating-linear-gradient(
-      115deg,
-      var(--candy-5b) 0 18%,
-      var(--candy-5) 18% 36%
-    );
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.3) 0px 8px, transparent 8px 16px),
+    linear-gradient(150deg, var(--candy-5b), var(--candy-5));
 }
 
 /* ── Motion ──────────────────────────────────────────────────────── */

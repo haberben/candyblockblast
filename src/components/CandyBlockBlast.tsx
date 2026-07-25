@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Music, Music2, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { Music, Music2, RotateCcw, Volume2, VolumeX, Home } from "lucide-react";
 
 import bgImage from "@/assets/candy-bg.jpg";
 import { Candy } from "./Candy";
@@ -16,7 +16,7 @@ import {
   type CandyId,
   type Piece,
 } from "@/lib/game";
-import { setMusic, setSfx, sfx, startMusic, unlockAudio } from "@/lib/sfx";
+import { setMusic, setSfx, sfx, startMusic, stopMusic, unlockAudio } from "@/lib/sfx";
 
 type Fx = { id: number; kind: "sparkle"; x: number; y: number; dx: number; dy: number; candy: CandyId };
 type Toast = { id: number; text: string; sub?: string };
@@ -24,6 +24,7 @@ type Toast = { id: number; text: string; sub?: string };
 let fxSeq = 0;
 
 export function CandyBlockBlast() {
+  const [gameMode, setGameMode] = useState<"levels" | "endless">("levels");
   const [board, setBoard] = useState<Board>(emptyBoard);
   const [tray, setTray] = useState<Piece[]>([]);
   const [levelIdx, setLevelIdx] = useState(1);
@@ -40,6 +41,27 @@ export function CandyBlockBlast() {
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
   const [started, setStarted] = useState(false);
+
+  // Load level index and record score on load
+  useEffect(() => {
+    const storedLevel = Number(localStorage.getItem("cbb_level") ?? 1);
+    if (storedLevel) setLevelIdx(storedLevel);
+  }, []);
+
+  // Sync best score based on current game mode
+  useEffect(() => {
+    const key = gameMode === "endless" ? "cbb_endless_best" : "cbb_best";
+    const stored = Number(localStorage.getItem(key) ?? 0);
+    setBest(stored);
+  }, [gameMode, started]);
+
+  useEffect(() => {
+    if (score > best) {
+      setBest(score);
+      const key = gameMode === "endless" ? "cbb_endless_best" : "cbb_best";
+      localStorage.setItem(key, String(score));
+    }
+  }, [score, best, gameMode]);
 
   // Tray is randomized on the client only (avoids SSR hydration mismatch).
   useEffect(() => {
@@ -60,18 +82,6 @@ export function CandyBlockBlast() {
   const dragRef = useRef<DragState | null>(null);
 
 
-  useEffect(() => {
-    const stored = Number(localStorage.getItem("cbb_best") ?? 0);
-    if (stored) setBest(stored);
-  }, []);
-
-  useEffect(() => {
-    if (score > best) {
-      setBest(score);
-      localStorage.setItem("cbb_best", String(score));
-    }
-  }, [score, best]);
-
   const pushToast = useCallback((text: string, sub?: string) => {
     const id = ++fxSeq;
     setToasts((t) => [...t, { id, text, sub }]);
@@ -81,6 +91,7 @@ export function CandyBlockBlast() {
   const startLevel = useCallback((idx: number) => {
     const lv = makeLevel(idx);
     setLevelIdx(idx);
+    localStorage.setItem("cbb_level", String(idx));
     setBoard(emptyBoard());
     setTray(newTray());
     setMoves(lv.moves);
@@ -92,13 +103,49 @@ export function CandyBlockBlast() {
 
   const restart = useCallback(() => {
     setScore(0);
-    startLevel(1);
-  }, [startLevel]);
+    if (gameMode === "levels") {
+      startLevel(levelIdx);
+    } else {
+      setBoard(emptyBoard());
+      setTray(newTray());
+      setMoves(9999);
+      setCollected(0);
+      setCombo(0);
+      setClearing(new Set());
+      setStatus("playing");
+    }
+  }, [gameMode, levelIdx, startLevel]);
 
-  const beginGame = () => {
+  const beginGame = (mode: "levels" | "endless") => {
+    setGameMode(mode);
     unlockAudio();
     if (musicOn) startMusic();
+
+    setScore(0);
+    setBoard(emptyBoard());
+    setTray(newTray());
+    setCombo(0);
+    setClearing(new Set());
+    setStatus("playing");
+
+    if (mode === "levels") {
+      const storedLevel = Number(localStorage.getItem("cbb_level") ?? 1);
+      const lv = makeLevel(storedLevel);
+      setLevelIdx(storedLevel);
+      setMoves(lv.moves);
+      setCollected(0);
+    } else {
+      setMoves(9999);
+      setCollected(0);
+    }
+
     setStarted(true);
+  };
+
+  const returnToMenu = () => {
+    stopMusic();
+    setStarted(false);
+    setStatus("playing");
   };
 
   /* ── Drag handling ─────────────────────────────────────────── */
@@ -237,21 +284,29 @@ export function CandyBlockBlast() {
   };
 
   const finishMove = (nextBoard: Board, nextTray: Piece[], gainedTarget: number) => {
-    setMoves((m) => {
-      const left = m - 1;
-      const totalCollected = collected + gainedTarget;
-      if (totalCollected >= level.targetCount) {
-        sfx.levelUp();
-        setStatus("won");
-        return left;
-      }
+    if (gameMode === "endless") {
       const stuck = !nextTray.some((p) => canPlaceAnywhere(nextBoard, p));
-      if (left <= 0 || stuck) {
+      if (stuck) {
         sfx.gameOver();
         setStatus("lost");
       }
-      return left;
-    });
+    } else {
+      setMoves((m) => {
+        const left = m - 1;
+        const totalCollected = collected + gainedTarget;
+        if (totalCollected >= level.targetCount) {
+          sfx.levelUp();
+          setStatus("won");
+          return left;
+        }
+        const stuck = !nextTray.some((p) => canPlaceAnywhere(nextBoard, p));
+        if (left <= 0 || stuck) {
+          sfx.gameOver();
+          setStatus("lost");
+        }
+        return left;
+      });
+    }
   };
 
   const cellSizePx = useCallback(() => {
@@ -272,7 +327,7 @@ export function CandyBlockBlast() {
 
   return (
     <div
-      className="relative flex min-h-screen w-full flex-col items-center overflow-hidden"
+      className="relative flex min-h-screen w-full flex-col items-center overflow-hidden animate-fade-in"
       style={{
         backgroundImage: `url(${bgImage})`,
         backgroundSize: "cover",
@@ -289,6 +344,9 @@ export function CandyBlockBlast() {
           targetCount={level.targetCount}
           moves={moves}
           level={levelIdx}
+          gameMode={gameMode}
+          best={best}
+          combo={combo}
         />
 
         <div className="mt-2 flex items-center justify-between">
@@ -296,7 +354,7 @@ export function CandyBlockBlast() {
             className="rounded-2xl px-3 py-1.5 font-display text-xs font-extrabold text-panel-foreground"
             style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
           >
-            REKOR: {best.toLocaleString("tr-TR")}
+            EN İYİ: {best.toLocaleString("tr-TR")}
           </div>
           <div className="flex gap-2">
             <button
@@ -308,7 +366,7 @@ export function CandyBlockBlast() {
                 });
               }}
               aria-label="Ses efektleri"
-              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer"
+              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer hover:scale-105 active:scale-95 transition-transform"
               style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
             >
               {soundOn ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
@@ -322,7 +380,7 @@ export function CandyBlockBlast() {
                 });
               }}
               aria-label="Müzik"
-              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer"
+              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer hover:scale-105 active:scale-95 transition-transform"
               style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
             >
               {musicOn ? <Music className="size-5" /> : <Music2 className="size-5 opacity-50" />}
@@ -331,10 +389,19 @@ export function CandyBlockBlast() {
               type="button"
               onClick={restart}
               aria-label="Yeniden başla"
-              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer"
+              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer hover:scale-105 active:scale-95 transition-transform"
               style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
             >
               <RotateCcw className="size-5" />
+            </button>
+            <button
+              type="button"
+              onClick={returnToMenu}
+              aria-label="Menüye Dön"
+              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+              style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
+            >
+              <Home className="size-5" />
             </button>
           </div>
         </div>
@@ -418,20 +485,24 @@ export function CandyBlockBlast() {
 
         {/* Tray */}
         <div
-          className="mt-1 grid grid-cols-3 items-center gap-2 rounded-3xl bg-boardbg p-3"
+          className="mt-1 grid grid-cols-3 items-center gap-2 rounded-3xl bg-boardbg p-3 h-24"
           style={{ boxShadow: "0 6px 0 oklch(0.3 0.06 265 / 0.5)" }}
         >
           {[0, 1, 2].map((slot) => {
             const piece = tray[slot];
-            if (!piece) return <div key={slot} className="h-20" />;
+            if (!piece) return <div key={slot} className="h-full" />;
             const dragging = drag?.slot === slot;
             const placeable = canPlaceAnywhere(board, piece);
-            const unit = 26;
+            
+            // Calculate dynamic unit sizes to prevent large shapes from overflowing the tray box
+            const maxDim = Math.max(piece.shape.w, piece.shape.h);
+            const unit = maxDim >= 5 ? 13 : maxDim >= 4 ? 17 : maxDim >= 3 ? 22 : 26;
+
             return (
               <div
                 key={piece.uid}
                 onPointerDown={onPiecePointerDown(piece, slot)}
-                className={`flex h-20 cursor-grab touch-none items-center justify-center rounded-2xl transition-opacity ${
+                className={`flex h-full cursor-grab touch-none items-center justify-center rounded-2xl transition-all ${
                   dragging ? "opacity-25" : placeable ? "anim-wobble opacity-100" : "opacity-40"
                 }`}
               >
@@ -496,10 +567,18 @@ export function CandyBlockBlast() {
       {!started && (
         <Overlay>
           <Title />
-          <p className="mt-3 max-w-xs text-center font-display text-sm font-bold text-panel-foreground">
-            Şeker bloklarını ızgaraya yerleştir, satırları patlat, komboları zincirle!
+          <p className="mt-3 max-w-xs text-center font-display text-sm font-bold text-panel-foreground leading-normal">
+            Şeker bloklarını ızgaraya yerleştir, satırları patlat, en yüksek skora ulaş!
           </p>
-          <BigButton onClick={beginGame}>OYNA</BigButton>
+          
+          <div className="flex flex-col w-full gap-3 mt-6">
+            <BigButton onClick={() => beginGame("levels")}>
+              SEVİYELİ MOD (Seviye {levelIdx})
+            </BigButton>
+            <BigButton onClick={() => beginGame("endless")}>
+              SINIRSIZ MOD
+            </BigButton>
+          </div>
         </Overlay>
       )}
 
@@ -512,6 +591,12 @@ export function CandyBlockBlast() {
             Puan: {score.toLocaleString("tr-TR")}
           </p>
           <BigButton onClick={() => startLevel(levelIdx + 1)}>SONRAKİ SEVİYE</BigButton>
+          <button 
+            onClick={returnToMenu}
+            className="mt-3 text-panel-foreground/80 font-display text-sm font-extrabold hover:text-panel-foreground cursor-pointer"
+          >
+            Menüye Dön
+          </button>
         </Overlay>
       )}
 
@@ -524,6 +609,12 @@ export function CandyBlockBlast() {
             Puan: {score.toLocaleString("tr-TR")} · Rekor: {best.toLocaleString("tr-TR")}
           </p>
           <BigButton onClick={restart}>TEKRAR DENE</BigButton>
+          <button 
+            onClick={returnToMenu}
+            className="mt-3 text-panel-foreground/80 font-display text-sm font-extrabold hover:text-panel-foreground cursor-pointer"
+          >
+            Menüye Dön
+          </button>
         </Overlay>
       )}
     </div>
@@ -532,9 +623,9 @@ export function CandyBlockBlast() {
 
 function Overlay({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-foreground/45 px-6 backdrop-blur-sm">
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-foreground/45 px-6 backdrop-blur-sm animate-fade-in">
       <div
-        className="flex w-full max-w-sm flex-col items-center rounded-[2rem] p-6"
+        className="flex w-full max-w-sm flex-col items-center rounded-[2rem] p-6 transition-all"
         style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-panel)" }}
       >
         {children}
@@ -561,7 +652,7 @@ function BigButton({ children, onClick }: { children: React.ReactNode; onClick: 
     <button
       type="button"
       onClick={onClick}
-      className="mt-5 rounded-full px-8 py-3 font-display text-xl font-extrabold text-accent-foreground transition-transform active:scale-95 cursor-pointer"
+      className="rounded-full px-6 py-3 font-display text-lg font-extrabold text-accent-foreground transition-transform hover:scale-102 active:scale-98 cursor-pointer"
       style={{ background: "var(--gradient-gold)", boxShadow: "var(--shadow-candy)" }}
     >
       {children}
