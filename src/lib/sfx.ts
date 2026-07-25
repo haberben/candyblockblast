@@ -68,36 +68,72 @@ function noise(dur: number, vol = 0.25, delay = 0) {
 export const sfx = {
   pick() {
     if (!audioState.sfx) return;
-    tone(880, 0.08, "triangle", 0.2);
+    // Juicy short tap click
+    tone(880, 0.05, "sine", 0.15);
+    tone(1320, 0.04, "sine", 0.08, 0.01);
   },
   place() {
     if (!audioState.sfx) return;
-    tone(520, 0.09, "square", 0.14);
-    tone(780, 0.08, "sine", 0.16, 0.04);
+    // satisfying double pop
+    tone(440, 0.06, "sine", 0.18);
+    tone(660, 0.05, "sine", 0.12, 0.02);
   },
   invalid() {
     if (!audioState.sfx) return;
-    tone(150, 0.16, "sawtooth", 0.12);
+    // low dull buzzy pluck
+    tone(120, 0.14, "sawtooth", 0.14);
+    tone(80, 0.18, "sawtooth", 0.12, 0.03);
   },
   blast(lines: number, combo: number) {
     if (!audioState.sfx) return;
-    const base = 520 + combo * 60;
-    [0, 0.07, 0.14, 0.21].slice(0, Math.max(2, lines + 1)).forEach((d, i) => {
-      tone(base * Math.pow(1.26, i), 0.22, "triangle", 0.26, d);
-    });
-    noise(0.35, 0.2);
+    const base = 300 + combo * 80;
+    // cascading bubble pop waterfall effect
+    for (let i = 0; i < lines * 3; i++) {
+      const delay = i * 0.055;
+      const freq = base * Math.pow(1.15, i % 4);
+      tone(freq, 0.13, "triangle", 0.28, delay);
+      tone(freq * 1.5, 0.09, "sine", 0.16, delay + 0.01);
+    }
+    // candy crunch noise effect
+    noise(0.24, 0.14);
   },
   combo(level: number) {
     if (!audioState.sfx) return;
-    [0, 0.08, 0.16].forEach((d, i) => tone(660 * Math.pow(1.2, i + level * 0.3), 0.2, "sine", 0.24, d));
+    // sparkling major chime arpeggio
+    const notes = [523, 659, 784, 1046, 1318]; // C major pentatonic
+    notes.forEach((f, i) => {
+      tone(f * Math.pow(1.08, level), 0.24, "sine", 0.16, i * 0.065);
+    });
   },
   levelUp() {
     if (!audioState.sfx) return;
-    [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.3, "triangle", 0.26, i * 0.11));
+    // glorious major chords fanfare
+    const chords = [
+      [261, 329, 392], // C major
+      [329, 392, 523], // E minor/C 1st inv
+      [392, 523, 659], // G / C 2nd inv
+      [523, 659, 784, 1046] // C major oct
+    ];
+    chords.forEach((chord, step) => {
+      chord.forEach((f) => {
+        tone(f, 0.42, "triangle", 0.13, step * 0.14);
+      });
+    });
   },
   gameOver() {
     if (!audioState.sfx) return;
-    [523, 440, 349, 262].forEach((f, i) => tone(f, 0.4, "sine", 0.24, i * 0.16));
+    // sad descending chord progression
+    const sadChords = [
+      [392, 466, 587], // G minor
+      [349, 440, 523], // F major
+      [311, 392, 466], // Eb major
+      [293, 349, 440]  // D minor
+    ];
+    sadChords.forEach((chord, step) => {
+      chord.forEach((f) => {
+        tone(f, 0.48, "sine", 0.14, step * 0.22);
+      });
+    });
   },
 };
 
