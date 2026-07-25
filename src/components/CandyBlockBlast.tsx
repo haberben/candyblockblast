@@ -80,6 +80,24 @@ export function CandyBlockBlast() {
   };
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const floatingRef = useRef<HTMLDivElement | null>(null);
+  const [cellSize, setCellSize] = useState(40);
+
+  useEffect(() => {
+    const updateSize = () => {
+      const el = boardRef.current;
+      if (el) {
+        setCellSize(el.getBoundingClientRect().width / SIZE);
+      }
+    };
+    updateSize();
+    const t = setTimeout(updateSize, 100);
+    window.addEventListener("resize", updateSize);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", updateSize);
+    };
+  }, []);
 
 
   const pushToast = useCallback((text: string, sub?: string) => {
@@ -153,7 +171,7 @@ export function CandyBlockBlast() {
     const el = boardRef.current;
     if (!el) return null;
     const r = el.getBoundingClientRect();
-    const cs = r.width / SIZE;
+    const cs = cellSize;
     let gx = Math.round((px - r.left - (piece.shape.w * cs) / 2) / cs);
     let gy = Math.round((py - r.top - cs * 1.6 - (piece.shape.h * cs) / 2) / cs);
     if (gx < -3 || gy < -3 || gx > SIZE + 2 || gy > SIZE + 2) return null;
@@ -161,7 +179,7 @@ export function CandyBlockBlast() {
     gx = Math.min(Math.max(gx, 0), SIZE - piece.shape.w);
     gy = Math.min(Math.max(gy, 0), SIZE - piece.shape.h);
     return { x: gx, y: gy };
-  }, []);
+  }, [cellSize]);
 
 
   const onPiecePointerDown = (piece: Piece, slot: number) => (e: React.PointerEvent) => {
@@ -184,12 +202,33 @@ export function CandyBlockBlast() {
     if (!drag) return;
     const move = (e: PointerEvent) => {
       e.preventDefault();
-      setDrag((d) => {
-        if (!d) return d;
-        const cell = cellFromPointer(d.piece, e.clientX, e.clientY);
-        const valid = cell ? canPlaceAt(board, d.piece, cell.x, cell.y) : false;
-        return { ...d, px: e.clientX, py: e.clientY, cell, valid };
-      });
+      
+      if (floatingRef.current) {
+        floatingRef.current.style.left = `${e.clientX}px`;
+        floatingRef.current.style.top = `${e.clientY - cellSize * 1.6}px`;
+      }
+
+      const currentDrag = dragRef.current;
+      if (!currentDrag) return;
+      
+      const cell = cellFromPointer(currentDrag.piece, e.clientX, e.clientY);
+      const valid = cell ? canPlaceAt(board, currentDrag.piece, cell.x, cell.y) : false;
+      
+      currentDrag.px = e.clientX;
+      currentDrag.py = e.clientY;
+      
+      const cellChanged = cell?.x !== currentDrag.cell?.x || cell?.y !== currentDrag.cell?.y;
+      const validityChanged = valid !== currentDrag.valid;
+      
+      if (cellChanged || validityChanged) {
+        currentDrag.cell = cell;
+        currentDrag.valid = valid;
+        
+        setDrag((d) => {
+          if (!d) return d;
+          return { ...d, cell, valid };
+        });
+      }
     };
     const up = () => {
       const d = dragRef.current;
@@ -207,7 +246,7 @@ export function CandyBlockBlast() {
       window.removeEventListener("pointercancel", up);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag !== null, board, cellFromPointer]);
+  }, [drag !== null, board, cellFromPointer, cellSize]);
 
   const spawnSparkles = (indices: number[], b: Board) => {
     const el = boardRef.current;
@@ -310,9 +349,8 @@ export function CandyBlockBlast() {
   };
 
   const cellSizePx = useCallback(() => {
-    const el = boardRef.current;
-    return el ? el.getBoundingClientRect().width / SIZE : 40;
-  }, []);
+    return cellSize;
+  }, [cellSize]);
 
   const ghostCells = useMemo(() => {
     if (!drag?.cell) return new Set<number>();
@@ -532,6 +570,7 @@ export function CandyBlockBlast() {
       {/* Floating dragged piece */}
       {drag && (
         <div
+          ref={floatingRef}
           className="pointer-events-none fixed z-50"
           style={{
             left: drag.px,
