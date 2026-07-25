@@ -1,0 +1,101 @@
+
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/jpg" href="/logo.jpg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Candy Block Blast</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="app">
+      <div id="map-screen" class="screen active">
+        <div class="logo-container">
+          <img class="logo-img" src="/logo.jpg" alt="Candy Blast Logo" />
+          <h1 class="game-title">Candy Block Blast</h1>
+        </div>
+
+        <div class="map-header">
+          <span class="header-title">Seviye Haritasi</span>
+          <button id="trophy-btn" class="map-btn-icon" title="Sifirla">🏆</button>
+        </div>
+
+        <div id="levels-grid">
+        </div>
+      </div>
+
+      <div id="game-screen" class="screen">
+        <div class="game-header">
+          <div class="stat-box">
+            <span class="stat-label">Puan</span>
+            <span id="score-value" class="stat-value">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Hedef</span>
+            <div class="target-container">
+              <div id="target-icon-box" class="target-icon"></div>
+              <span id="target-value" class="stat-value">0</span>
+            </div>
+            <span id="target-label" class="stat-label" style="font-size:8px;">Lolipop</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Hamle</span>
+            <span id="moves-value" class="stat-value">0</span>
+          </div>
+        </div>
+
+        <div class="top-menu-bar">
+          <button id="map-btn" class="circle-btn" title="Haritaya Don">🗺️</button>
+          <button id="mute-btn" class="circle-btn" title="Sesi Ac/Kapat">🔊</button>
+        </div>
+
+        <div class="board-wrapper">
+          <div id="board-container">
+          </div>
+          <canvas id="vfx-canvas"></canvas>
+          <div id="combo-indicator">
+            <div class="combo-card">
+              <span id="combo-text">10x COMBO!</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-panel">
+          <div id="shapes-container">
+          </div>
+        </div>
+      </div>
+
+      <div id="win-modal" class="modal-overlay">
+        <div class="modal-content">
+          <h2 class="modal-title">Harika!</h2>
+          <div class="modal-icon">🍭✨</div>
+          <p class="modal-stat">Puaniniz</p>
+          <div id="win-score-val" class="modal-score-val">125,750</div>
+          <p class="modal-desc" style="margin-top: 10px;">Seviye hedefini basariyla tamamladiniz! Harika bir is cikardiniz.</p>
+          <div class="modal-actions">
+            <button id="win-next-btn" class="action-btn">Sonraki Seviye</button>
+            <button id="win-map-btn" class="action-btn secondary">Haritaya Git</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="fail-modal" class="modal-overlay">
+        <div class="modal-content">
+          <h2 class="modal-title">Oyun Bitti</h2>
+          <div class="modal-icon">😢🍬</div>
+          <p id="fail-reason-text" class="modal-desc" style="font-size:15px; margin: 15px 0;">Hamleleriniz bitti veya yer kalmadi.</p>
+          <div class="modal-actions">
+            <button id="fail-retry-btn" class="action-btn">Tekrar Dene</button>
+            <button id="fail-map-btn" class="action-btn secondary">Haritaya Git</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

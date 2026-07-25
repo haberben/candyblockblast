@@ -1,0 +1,15 @@
+{
+  "appId": "com.candyblockblast.game",
+  "appName": "Candy Block Blast",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "backgroundColor": "#20021b",
+      "showSpinner": false
+    }
+  }
+}
