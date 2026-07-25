@@ -1,0 +1,4 @@
+build:
+  node: 20.x
+  dependency_install_command: npm install
+  web_build_command: npm run build
