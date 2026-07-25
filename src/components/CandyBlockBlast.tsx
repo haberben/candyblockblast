@@ -23,8 +23,16 @@ type Toast = { id: number; text: string; sub?: string };
 
 let fxSeq = 0;
 
+const formatTime = (seconds: number) => {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s < 10 ? "0" : ""}${s}`;
+};
+
 export function CandyBlockBlast() {
-  const [gameMode, setGameMode] = useState<"levels" | "endless">("levels");
+  const [gameMode, setGameMode] = useState<"levels" | "endless" | "timeattack">("levels");
+  const [timeAttackLimit, setTimeAttackLimit] = useState(60); // default 60s
+  const [timeLeft, setTimeLeft] = useState(60);
   const [board, setBoard] = useState<Board>(emptyBoard);
   const [tray, setTray] = useState<Piece[]>([]);
   const [levelIdx, setLevelIdx] = useState(1);
@@ -50,18 +58,47 @@ export function CandyBlockBlast() {
 
   // Sync best score based on current game mode
   useEffect(() => {
-    const key = gameMode === "endless" ? "cbb_endless_best" : "cbb_best";
+    let key = "cbb_best";
+    if (gameMode === "endless") {
+      key = "cbb_endless_best";
+    } else if (gameMode === "timeattack") {
+      key = `cbb_timeattack_best_${timeAttackLimit}`;
+    }
     const stored = Number(localStorage.getItem(key) ?? 0);
     setBest(stored);
-  }, [gameMode, started]);
+  }, [gameMode, started, timeAttackLimit]);
 
   useEffect(() => {
     if (score > best) {
       setBest(score);
-      const key = gameMode === "endless" ? "cbb_endless_best" : "cbb_best";
+      let key = "cbb_best";
+      if (gameMode === "endless") {
+        key = "cbb_endless_best";
+      } else if (gameMode === "timeattack") {
+        key = `cbb_timeattack_best_${timeAttackLimit}`;
+      }
       localStorage.setItem(key, String(score));
     }
-  }, [score, best, gameMode]);
+  }, [score, best, gameMode, timeAttackLimit]);
+
+  // Time Attack Countdown Timer
+  useEffect(() => {
+    if (!started || gameMode !== "timeattack" || status !== "playing") return;
+    
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setStatus("lost");
+          sfx.gameOver();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [started, gameMode, status]);
 
   // Tray is randomized on the client only (avoids SSR hydration mismatch).
   useEffect(() => {
@@ -123,6 +160,15 @@ export function CandyBlockBlast() {
     setScore(0);
     if (gameMode === "levels") {
       startLevel(levelIdx);
+    } else if (gameMode === "timeattack") {
+      setBoard(emptyBoard());
+      setTray(newTray());
+      setMoves(9999);
+      setCollected(0);
+      setCombo(0);
+      setClearing(new Set());
+      setTimeLeft(timeAttackLimit);
+      setStatus("playing");
     } else {
       setBoard(emptyBoard());
       setTray(newTray());
@@ -132,9 +178,9 @@ export function CandyBlockBlast() {
       setClearing(new Set());
       setStatus("playing");
     }
-  }, [gameMode, levelIdx, startLevel]);
+  }, [gameMode, levelIdx, startLevel, timeAttackLimit]);
 
-  const beginGame = (mode: "levels" | "endless") => {
+  const beginGame = (mode: "levels" | "endless" | "timeattack") => {
     setGameMode(mode);
     unlockAudio();
     if (musicOn) startMusic();
@@ -152,6 +198,10 @@ export function CandyBlockBlast() {
       setLevelIdx(storedLevel);
       setMoves(lv.moves);
       setCollected(0);
+    } else if (mode === "timeattack") {
+      setMoves(9999);
+      setCollected(0);
+      setTimeLeft(timeAttackLimit);
     } else {
       setMoves(9999);
       setCollected(0);
@@ -385,6 +435,8 @@ export function CandyBlockBlast() {
           gameMode={gameMode}
           best={best}
           combo={combo}
+          timeLeft={timeLeft}
+          timeLimit={timeAttackLimit}
         />
 
         <div className="mt-2 flex items-center justify-between">
@@ -610,13 +662,40 @@ export function CandyBlockBlast() {
             Şeker bloklarını ızgaraya yerleştir, satırları patlat, en yüksek skora ulaş!
           </p>
           
-          <div className="flex flex-col w-full gap-3 mt-6">
+          <div className="flex flex-col w-full gap-3 mt-5">
             <BigButton onClick={() => beginGame("levels")}>
               SEVİYELİ MOD (Seviye {levelIdx})
             </BigButton>
             <BigButton onClick={() => beginGame("endless")}>
               SINIRSIZ MOD
             </BigButton>
+            
+            <div className="flex flex-col w-full gap-2 rounded-2xl p-2 border border-panel-foreground/10 bg-black/10">
+              <BigButton onClick={() => beginGame("timeattack")} className="bg-gradient-to-r from-purple-600 to-indigo-600">
+                ZAMANA KARŞI MODU
+              </BigButton>
+              
+              <div className="flex items-center justify-between px-3 py-1 text-panel-foreground font-display font-extrabold text-sm">
+                <span>Süre Ayarı:</span>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setTimeAttackLimit(prev => Math.max(30, prev - 30))}
+                    className="size-8 rounded-full bg-black/30 flex items-center justify-center hover:bg-black/50 text-xl font-bold cursor-pointer select-none text-panel-foreground"
+                  >
+                    -
+                  </button>
+                  <span className="text-base tracking-wider min-w-[3.5rem] text-center" style={{ color: "var(--gold)" }}>
+                    {formatTime(timeAttackLimit)}
+                  </span>
+                  <button 
+                    onClick={() => setTimeAttackLimit(prev => Math.min(300, prev + 30))}
+                    className="size-8 rounded-full bg-black/30 flex items-center justify-center hover:bg-black/50 text-xl font-bold cursor-pointer select-none text-panel-foreground"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </Overlay>
       )}
@@ -642,9 +721,15 @@ export function CandyBlockBlast() {
       {status === "lost" && (
         <Overlay>
           <div className="font-display text-4xl font-extrabold text-outline" style={{ color: "var(--gold)" }}>
-            OYUN BİTTİ
+            {gameMode === "timeattack" && timeLeft === 0 ? "SÜRE BİTTİ!" : "OYUN BİTTİ"}
           </div>
-          <p className="mt-2 font-display text-lg font-extrabold text-panel-foreground">
+          <p className="mt-2 font-display text-lg font-extrabold text-panel-foreground text-center">
+            {gameMode === "timeattack" && timeLeft === 0 ? (
+              <span>Zamana Karşı ({formatTime(timeAttackLimit)}) skoru</span>
+            ) : (
+              <span>Skorunuz</span>
+            )}
+            <br />
             Puan: {score.toLocaleString("tr-TR")} · Rekor: {best.toLocaleString("tr-TR")}
           </p>
           <BigButton onClick={restart}>TEKRAR DENE</BigButton>
