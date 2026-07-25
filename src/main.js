@@ -1,4 +1,5 @@
 
+import './style.css';
 import { GameBoard } from './board';
 import { generateThreeShapes, renderShapeDOM } from './blocks';
 import { LEVELS, saveLevelProgress, getLevelsState, CANDY_TYPES, CANDY_SVGS } from './levels';
