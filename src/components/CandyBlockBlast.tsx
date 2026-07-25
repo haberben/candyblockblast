@@ -49,11 +49,17 @@ export function CandyBlockBlast() {
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
   const [started, setStarted] = useState(false);
+  const [hasSavedGame, setHasSavedGame] = useState(false);
 
-  // Load level index and record score on load
+  // Load level index and check for saved game on load
   useEffect(() => {
     const storedLevel = Number(localStorage.getItem("cbb_level") ?? 1);
     if (storedLevel) setLevelIdx(storedLevel);
+
+    const saved = localStorage.getItem("cbb_saved_game");
+    if (saved) {
+      setHasSavedGame(true);
+    }
   }, []);
 
   // Sync best score based on current game mode
@@ -99,6 +105,61 @@ export function CandyBlockBlast() {
 
     return () => clearInterval(interval);
   }, [started, gameMode, status]);
+
+  // Auto-save game state
+  useEffect(() => {
+    if (!started || status !== "playing") {
+      if (status === "won" || status === "lost") {
+        localStorage.removeItem("cbb_saved_game");
+      }
+      return;
+    }
+    const stateToSave = {
+      board,
+      tray,
+      score,
+      combo,
+      moves,
+      collected,
+      gameMode,
+      levelIdx,
+      timeLeft,
+      timeAttackLimit,
+    };
+    localStorage.setItem("cbb_saved_game", JSON.stringify(stateToSave));
+  }, [started, status, board, tray, score, combo, moves, collected, gameMode, levelIdx, timeLeft, timeAttackLimit]);
+
+  const resumeSavedGame = () => {
+    const saved = localStorage.getItem("cbb_saved_game");
+    if (!saved) return;
+    try {
+      const data = JSON.parse(saved);
+      setBoard(data.board);
+      setTray(data.tray);
+      setScore(data.score);
+      setCombo(data.combo);
+      setMoves(data.moves);
+      setCollected(data.collected);
+      setGameMode(data.gameMode);
+      setLevelIdx(data.levelIdx);
+      setTimeLeft(data.timeLeft);
+      setTimeAttackLimit(data.timeAttackLimit ?? 60);
+      
+      unlockAudio();
+      if (musicOn) startMusic();
+      setStarted(true);
+      setHasSavedGame(false);
+    } catch (e) {
+      console.error("Error loading saved game:", e);
+      localStorage.removeItem("cbb_saved_game");
+      setHasSavedGame(false);
+    }
+  };
+
+  const discardSavedGame = () => {
+    localStorage.removeItem("cbb_saved_game");
+    setHasSavedGame(false);
+  };
 
   // Tray is randomized on the client only (avoids SSR hydration mismatch).
   useEffect(() => {
@@ -655,7 +716,29 @@ export function CandyBlockBlast() {
       )}
 
       {/* Overlays */}
-      {!started && (
+      {!started && hasSavedGame ? (
+        <Overlay>
+          <Title />
+          <div className="font-display text-xl font-black text-panel-foreground text-center mt-4">
+            YARIM KALAN OYUN VAR!
+          </div>
+          <p className="mt-3 max-w-xs text-center font-display text-sm font-bold text-panel-foreground/80 leading-normal">
+            Kapatmadan önce yarım kalan bir oyunun olduğunu fark ettik. Kaldığın yerden devam etmek ister misin?
+          </p>
+          
+          <div className="flex flex-col w-full gap-3 mt-6">
+            <BigButton onClick={resumeSavedGame}>
+              DEVAM ET
+            </BigButton>
+            <button 
+              onClick={discardSavedGame}
+              className="mt-3 text-panel-foreground/80 font-display text-sm font-extrabold hover:text-panel-foreground cursor-pointer"
+            >
+              Yeni Oyun Başlat (Kaydı Sil)
+            </button>
+          </div>
+        </Overlay>
+      ) : !started && (
         <Overlay>
           <Title />
           <p className="mt-3 max-w-xs text-center font-display text-sm font-bold text-panel-foreground leading-normal">
