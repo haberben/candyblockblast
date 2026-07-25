@@ -156,7 +156,7 @@ export function CandyBlockBlast() {
     const cs = r.width / SIZE;
     let gx = Math.round((px - r.left - (piece.shape.w * cs) / 2) / cs);
     let gy = Math.round((py - r.top - cs * 1.6 - (piece.shape.h * cs) / 2) / cs);
-    if (gx < -1 || gy < -1 || gx > SIZE || gy > SIZE) return null;
+    if (gx < -3 || gy < -3 || gx > SIZE + 2 || gy > SIZE + 2) return null;
     // forgiving snap: keep the piece fully inside the grid
     gx = Math.min(Math.max(gx, 0), SIZE - piece.shape.w);
     gy = Math.min(Math.max(gy, 0), SIZE - piece.shape.h);
