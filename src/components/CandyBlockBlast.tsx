@@ -157,8 +157,8 @@ export function CandyBlockBlast() {
     if (!r) return null;
     const cs = core.cellSize;
     
-    // Parmak tahtanın çok altındaysa (iptal etmek için sürükleme) veya çok üstündeyse null dön
-    if (py > r.bottom + 50 || py < r.top - 100) return null;
+    // Parmak tahtanın çok altındaysa (ekranın en alt sınırı) veya çok üstündeyse null dön
+    if (py > r.bottom + 160 || py < r.top - 120) return null;
     
     let gx = Math.round((px - core.offX - (r.left + 6)) / cs);
     let gy = Math.round((py - core.offY - (r.top + 6)) / cs);
@@ -213,7 +213,7 @@ export function CandyBlockBlast() {
       slot,
       cellSize: cs,
       offX: (piece.shape.w * cs) / 2,
-      offY: piece.shape.h * cs + 15,
+      offY: piece.shape.h * cs + 65,
     };
     coreRef.current = core;
     const view = { piece, slot, cell: null, valid: false };
