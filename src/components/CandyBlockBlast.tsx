@@ -156,9 +156,14 @@ export function CandyBlockBlast() {
     const r = rectRef.current;
     if (!r) return null;
     const cs = core.cellSize;
+    
+    // Parmak tahtanın çok altındaysa (iptal etmek için sürükleme) veya çok üstündeyse null dön
+    if (py > r.bottom + 50 || py < r.top - 100) return null;
+    
     let gx = Math.round((px - core.offX - (r.left + 6)) / cs);
     let gy = Math.round((py - core.offY - (r.top + 6)) / cs);
-    if (gx < -1.5 || gy < -1.5 || gx > SIZE + 0.5 || gy > SIZE + 0.5) return null;
+    
+    // Izgara sınırlarına kelepçele (böylece parmak tepsideyken bile en alta oturur)
     gx = Math.min(Math.max(gx, 0), SIZE - core.piece.shape.w);
     gy = Math.min(Math.max(gy, 0), SIZE - core.piece.shape.h);
     return { x: gx, y: gy };
@@ -208,7 +213,7 @@ export function CandyBlockBlast() {
       slot,
       cellSize: cs,
       offX: (piece.shape.w * cs) / 2,
-      offY: piece.shape.h * cs + cs * 0.55,
+      offY: piece.shape.h * cs + 15,
     };
     coreRef.current = core;
     const view = { piece, slot, cell: null, valid: false };
@@ -358,7 +363,7 @@ export function CandyBlockBlast() {
   commitRef.current = commit;
 
   const ghostCells = useMemo(() => {
-    if (!dragView?.cell) return new Set<number>();
+    if (!dragView?.cell || !dragView.valid) return new Set<number>();
     const s = new Set<number>();
     dragView.piece.shape.cells.forEach(([x, y]) => {
       const gx = dragView.cell!.x + x;
@@ -531,7 +536,7 @@ export function CandyBlockBlast() {
       {dragView && (
         <div
           ref={floatRef}
-          className="pointer-events-none fixed top-0 left-0 z-50 will-change-transform"
+          className="pointer-events-none fixed top-0 left-0 z-50 will-change-transform opacity-80"
           style={{
             width: dragView.piece.shape.w * dragCell,
             height: dragView.piece.shape.h * dragCell,
