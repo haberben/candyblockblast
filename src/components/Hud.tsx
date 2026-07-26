@@ -22,7 +22,7 @@ const formatTime = (seconds: number) => {
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 };
 
-export function Hud({
+export const Hud = React.memo(function Hud({
   score,
   targetCandy,
   collected,
@@ -202,4 +202,4 @@ export function Hud({
       </div>
     </div>
   );
-}
+});

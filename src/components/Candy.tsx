@@ -8,11 +8,11 @@ type CandyProps = {
   style?: React.CSSProperties;
 };
 
-export function Candy({ id, className, style }: CandyProps) {
+export const Candy = React.memo(function Candy({ id, className, style }: CandyProps) {
   return (
     <div
       className={cn("candy-base candy-shine w-full h-full", `c${id}`, className)}
       style={style}
     />
   );
-}
+});

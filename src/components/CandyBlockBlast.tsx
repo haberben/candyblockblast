@@ -327,8 +327,7 @@ export function CandyBlockBlast() {
       e.preventDefault();
       
       if (floatingRef.current) {
-        floatingRef.current.style.left = `${e.clientX}px`;
-        floatingRef.current.style.top = `${e.clientY - cellSize * 1.6}px`;
+        floatingRef.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY - cellSize * 1.6}px, 0) translate(-50%, -50%)`;
       }
 
       const currentDrag = dragRef.current;
@@ -698,9 +697,10 @@ export function CandyBlockBlast() {
           ref={floatingRef}
           className="pointer-events-none fixed z-50"
           style={{
-            left: drag.px,
-            top: drag.py - cellSizePx() * 1.6,
-            transform: `translate(-50%, -50%)`,
+            left: 0,
+            top: 0,
+            transform: `translate3d(${drag.px}px, ${drag.py - cellSizePx() * 1.6}px, 0) translate(-50%, -50%)`,
+            willChange: "transform",
           }}
         >
           <div
@@ -853,7 +853,7 @@ function Overlay({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Title() {
+const Title = React.memo(function Title() {
   return (
     <h1 className="text-center font-display text-5xl leading-none font-extrabold">
       <span className="text-outline block" style={{ color: "var(--candy-5)" }}>
@@ -864,7 +864,7 @@ function Title() {
       </span>
     </h1>
   );
-}
+});
 
 function BigButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
