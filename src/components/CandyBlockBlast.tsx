@@ -179,6 +179,7 @@ export function CandyBlockBlast() {
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const floatingRef = useRef<HTMLDivElement | null>(null);
+  const boardRectRef = useRef<{ left: number; top: number } | null>(null);
   const [cellSize, setCellSize] = useState(40);
 
   useEffect(() => {
@@ -279,9 +280,13 @@ export function CandyBlockBlast() {
 
   /* ── Drag handling ─────────────────────────────────────────── */
   const cellFromPointer = useCallback((piece: Piece, px: number, py: number) => {
-    const el = boardRef.current;
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
+    let r = boardRectRef.current;
+    if (!r) {
+      const el = boardRef.current;
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      r = { left: rect.left, top: rect.top };
+    }
     const cs = cellSize;
     let gx = Math.round((px - r.left - (piece.shape.w * cs) / 2) / cs);
     let gy = Math.round((py - r.top - cs * 1.6 - (piece.shape.h * cs) / 2) / cs);
@@ -298,11 +303,18 @@ export function CandyBlockBlast() {
     e.preventDefault();
     unlockAudio();
     sfx.pick();
+    
+    // Cache the board bounds on pointer down to prevent layout thrashing during moves
+    const el = boardRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      boardRectRef.current = { left: r.left, top: r.top };
+    }
+
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const d: DragState = { piece, slot, px: e.clientX, py: e.clientY, cell: null, valid: false };
     dragRef.current = d;
     setDrag(d);
-
   };
 
   useEffect(() => {
@@ -476,7 +488,7 @@ export function CandyBlockBlast() {
 
   return (
     <div
-      className="relative flex min-h-screen w-full flex-col items-center overflow-hidden animate-fade-in"
+      className="relative flex min-h-screen w-full flex-col items-center overflow-hidden animate-fade-in touch-none select-none"
       style={{
         backgroundImage: `url(${bgImage})`,
         backgroundSize: "cover",
@@ -665,7 +677,7 @@ export function CandyBlockBlast() {
                     <Candy
                       key={`${x}-${y}`}
                       id={piece.candy}
-                      className="absolute"
+                      className="absolute pointer-events-none"
                       style={{ left: x * unit, top: y * unit, width: unit - 2, height: unit - 2 }}
                     />
                   ))}
