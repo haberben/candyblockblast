@@ -158,7 +158,7 @@ export function CandyBlockBlast() {
     const cs = core.cellSize;
     
     // Parmak tahtanın çok altındaysa (ekranın en alt sınırı) veya çok üstündeyse null dön
-    if (py > r.bottom + 160 || py < r.top - 120) return null;
+    if (py > r.bottom + 250 || py < r.top - 200) return null;
     
     let gx = Math.round((px - core.offX - (r.left + 6)) / cs);
     let gy = Math.round((py - core.offY - (r.top + 6)) / cs);
@@ -213,7 +213,7 @@ export function CandyBlockBlast() {
       slot,
       cellSize: cs,
       offX: (piece.shape.w * cs) / 2,
-      offY: piece.shape.h * cs + 65,
+      offY: piece.shape.h * cs + 150,
     };
     coreRef.current = core;
     const view = { piece, slot, cell: null, valid: false };
@@ -267,11 +267,13 @@ export function CandyBlockBlast() {
     const r = el.getBoundingClientRect();
     const cs = r.width / SIZE;
     const parts: Fx[] = [];
-    indices.slice(0, 26).forEach((i) => {
+    // Eski GPU'larda (J5 gibi) kasılmayı önlemek için parçacık üretilen hücre sayısını 8 ile sınırla
+    indices.slice(0, 8).forEach((i) => {
       const cx = (i % SIZE) * cs + cs / 2;
       const cy = Math.floor(i / SIZE) * cs + cs / 2;
       const candy = (b[i] ?? 0) as CandyId;
-      for (let k = 0; k < 3; k++) {
+      // Hücre başına 3 yerine 2 parçacık üreterek döngüyü rahatlat
+      for (let k = 0; k < 2; k++) {
         parts.push({
           id: ++fxSeq,
           x: cx,
@@ -728,7 +730,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function Overlay({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center overflow-y-auto bg-foreground/45 px-5 py-6 backdrop-blur-sm">
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center overflow-y-auto bg-black/60 px-5 py-6">
       <div
         className="flex w-full max-w-sm flex-col items-center rounded-[2rem] p-5"
         style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-panel)" }}
