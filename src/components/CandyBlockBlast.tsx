@@ -32,6 +32,13 @@ type DragCore = {
 };
 type DragView = { piece: Piece; slot: number; cell: { x: number; y: number } | null; valid: boolean };
 
+const getActiveOffY = (core: DragCore, py: number, r: DOMRect) => {
+  const maxOffY = core.piece.shape.h * core.cellSize + 175; // 3.5x dikey ofset (yukarıda süzülmesi için)
+  const minOffY = (core.piece.shape.h * core.cellSize) / 2; // Parmağın altına inmesi için (tepside sıfırlanır)
+  const ratio = Math.min(1, Math.max(0, (py - r.bottom) / 80));
+  return maxOffY - ratio * (maxOffY - minOffY);
+};
+
 let fxSeq = 0;
 
 export function CandyBlockBlast() {
@@ -157,11 +164,12 @@ export function CandyBlockBlast() {
     if (!r) return null;
     const cs = core.cellSize;
     
-    // Parmak tahtanın çok altındaysa (ekranın en alt sınırı) veya çok üstündeyse null dön
-    if (py > r.bottom + 250 || py < r.top - 200) return null;
+    // Parmak tepsinin ortasından aşağıya indiğinde yerleşimi iptal et (tahtaya snap olmasın)
+    if (py > r.bottom + 65 || py < r.top - 120) return null;
     
+    const activeOffY = getActiveOffY(core, py, r);
     let gx = Math.round((px - core.offX - (r.left + 6)) / cs);
-    let gy = Math.round((py - core.offY - (r.top + 6)) / cs);
+    let gy = Math.round((py - activeOffY - (r.top + 6)) / cs);
     
     // Izgara sınırlarına kelepçele (böylece parmak tepsideyken bile en alta oturur)
     gx = Math.min(Math.max(gx, 0), SIZE - core.piece.shape.w);
@@ -178,9 +186,10 @@ export function CandyBlockBlast() {
     const valid = cell ? canPlaceAt(boardStateRef.current, core.piece, cell.x, cell.y) : false;
     if (floatRef.current) {
       const r = rectRef.current;
+      const activeOffY = r ? getActiveOffY(core, p.y, r) : core.offY;
       // snap the floating piece onto the highlighted cells (mobile-game feel)
       const tx = cell && r ? r.left + 6 + cell.x * core.cellSize : p.x - core.offX;
-      const ty = cell && r ? r.top + 6 + cell.y * core.cellSize : p.y - core.offY;
+      const ty = cell && r ? r.top + 6 + cell.y * core.cellSize : p.y - activeOffY;
       floatRef.current.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
     }
     const prev = viewRef.current;
@@ -257,7 +266,9 @@ export function CandyBlockBlast() {
     if (dragView && floatRef.current && pendingRef.current && coreRef.current) {
       const p = pendingRef.current;
       const c = coreRef.current;
-      floatRef.current.style.transform = `translate3d(${p.x - c.offX}px, ${p.y - c.offY}px, 0)`;
+      const r = rectRef.current;
+      const activeOffY = r ? getActiveOffY(c, p.y, r) : c.offY;
+      floatRef.current.style.transform = `translate3d(${p.x - c.offX}px, ${p.y - activeOffY}px, 0)`;
     }
   }, [dragView]);
 
