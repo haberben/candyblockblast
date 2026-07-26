@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Music, Music2, RotateCcw, Volume2, VolumeX, Home } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Music, Music2, Home, RotateCcw, Volume2, VolumeX } from "lucide-react";
 
 import bgImage from "@/assets/candy-bg.jpg";
 import { Candy } from "./Candy";
@@ -16,23 +16,31 @@ import {
   type CandyId,
   type Piece,
 } from "@/lib/game";
+import { MODES, TIME_OPTIONS, readBest, writeBest, type Mode } from "@/lib/modes";
+import { THEMES, THEME_KEY, getTheme, type ThemeId } from "@/lib/themes";
 import { setMusic, setSfx, sfx, startMusic, stopMusic, unlockAudio } from "@/lib/sfx";
 
-type Fx = { id: number; kind: "sparkle"; x: number; y: number; dx: number; dy: number; candy: CandyId };
+type Fx = { id: number; x: number; y: number; dx: number; dy: number; candy: CandyId };
 type Toast = { id: number; text: string; sub?: string };
+
+type DragCore = {
+  piece: Piece;
+  slot: number;
+  cellSize: number;
+  offX: number;
+  offY: number;
+};
+type DragView = { piece: Piece; slot: number; cell: { x: number; y: number } | null; valid: boolean };
 
 let fxSeq = 0;
 
-const formatTime = (seconds: number) => {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s < 10 ? "0" : ""}${s}`;
-};
-
 export function CandyBlockBlast() {
-  const [gameMode, setGameMode] = useState<"levels" | "endless" | "timeattack">("levels");
-  const [timeAttackLimit, setTimeAttackLimit] = useState(60); // default 60s
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [themeId, setThemeId] = useState<ThemeId>("candy");
+  const theme = getTheme(themeId);
+
+  const [mode, setMode] = useState<Mode>("time");
+  const [seconds, setSeconds] = useState(60);
+
   const [board, setBoard] = useState<Board>(emptyBoard);
   const [tray, setTray] = useState<Piece[]>([]);
   const [levelIdx, setLevelIdx] = useState(1);
@@ -42,162 +50,70 @@ export function CandyBlockBlast() {
   const [moves, setMoves] = useState(level.moves);
   const [collected, setCollected] = useState(0);
   const [combo, setCombo] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(60);
   const [clearing, setClearing] = useState<Set<number>>(new Set());
   const [fx, setFx] = useState<Fx[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [status, setStatus] = useState<"playing" | "won" | "lost">("playing");
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
-  const [started, setStarted] = useState(false);
-  const [hasSavedGame, setHasSavedGame] = useState(false);
+  const [screen, setScreen] = useState<"menu" | "game">("menu");
 
-  // Load level index and check for saved game on load
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const floatRef = useRef<HTMLDivElement | null>(null);
+  const rectRef = useRef<DOMRect | null>(null);
+  const coreRef = useRef<DragCore | null>(null);
+  const viewRef = useRef<DragView | null>(null);
+  const boardStateRef = useRef<Board>(board);
+  const rafRef = useRef<number | null>(null);
+  const pendingRef = useRef<{ x: number; y: number } | null>(null);
+  const [dragView, setDragView] = useState<DragView | null>(null);
+
+  boardStateRef.current = board;
+
+  /* ── Persisted prefs (offline) ─────────────────────────────────── */
   useEffect(() => {
-    const storedLevel = Number(localStorage.getItem("cbb_level") ?? 1);
-    if (storedLevel) setLevelIdx(storedLevel);
-
-    const saved = localStorage.getItem("cbb_saved_game");
-    if (saved) {
-      setHasSavedGame(true);
-    }
+    const t = localStorage.getItem(THEME_KEY) as ThemeId | null;
+    if (t && THEMES.some((x) => x.id === t)) setThemeId(t);
+    const m = localStorage.getItem("cbb_mode") as Mode | null;
+    if (m && MODES.some((x) => x.id === m)) setMode(m);
+    const s = Number(localStorage.getItem("cbb_seconds") ?? 60);
+    if (TIME_OPTIONS.includes(s)) setSeconds(s);
+    setTray((prev) => (prev.length === 0 ? newTray() : prev));
   }, []);
 
-  // Sync best score based on current game mode
   useEffect(() => {
-    let key = "cbb_best";
-    if (gameMode === "endless") {
-      key = "cbb_endless_best";
-    } else if (gameMode === "timeattack") {
-      key = `cbb_timeattack_best_${timeAttackLimit}`;
-    }
-    const stored = Number(localStorage.getItem(key) ?? 0);
-    setBest(stored);
-  }, [gameMode, started, timeAttackLimit]);
+    localStorage.setItem(THEME_KEY, themeId);
+  }, [themeId]);
+  useEffect(() => {
+    localStorage.setItem("cbb_mode", mode);
+    localStorage.setItem("cbb_seconds", String(seconds));
+    setBest(readBest(mode, seconds));
+  }, [mode, seconds]);
 
   useEffect(() => {
     if (score > best) {
       setBest(score);
-      let key = "cbb_best";
-      if (gameMode === "endless") {
-        key = "cbb_endless_best";
-      } else if (gameMode === "timeattack") {
-        key = `cbb_timeattack_best_${timeAttackLimit}`;
-      }
-      localStorage.setItem(key, String(score));
+      writeBest(mode, seconds, score);
     }
-  }, [score, best, gameMode, timeAttackLimit]);
+  }, [score, best, mode, seconds]);
 
-  // Time Attack Countdown Timer
+  /* ── Timer (time attack) ───────────────────────────────────────── */
   useEffect(() => {
-    if (!started || gameMode !== "timeattack" || status !== "playing") return;
-    
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setStatus("lost");
+    if (screen !== "game" || mode !== "time" || status !== "playing") return;
+    const id = window.setInterval(() => {
+      setTimeLeft((t) => {
+        if (t <= 1) {
           sfx.gameOver();
+          setStatus("lost");
           return 0;
         }
-        return prev - 1;
+        if (t <= 6) sfx.tick();
+        return t - 1;
       });
     }, 1000);
-
-    return () => clearInterval(interval);
-  }, [started, gameMode, status]);
-
-  // Auto-save game state
-  useEffect(() => {
-    if (!started || status !== "playing") {
-      if (status === "won" || status === "lost") {
-        localStorage.removeItem("cbb_saved_game");
-      }
-      return;
-    }
-    const stateToSave = {
-      board,
-      tray,
-      score,
-      combo,
-      moves,
-      collected,
-      gameMode,
-      levelIdx,
-      timeLeft,
-      timeAttackLimit,
-    };
-    localStorage.setItem("cbb_saved_game", JSON.stringify(stateToSave));
-  }, [started, status, board, tray, score, combo, moves, collected, gameMode, levelIdx, timeLeft, timeAttackLimit]);
-
-  const resumeSavedGame = () => {
-    const saved = localStorage.getItem("cbb_saved_game");
-    if (!saved) return;
-    try {
-      const data = JSON.parse(saved);
-      setBoard(data.board);
-      setTray(data.tray);
-      setScore(data.score);
-      setCombo(data.combo);
-      setMoves(data.moves);
-      setCollected(data.collected);
-      setGameMode(data.gameMode);
-      setLevelIdx(data.levelIdx);
-      setTimeLeft(data.timeLeft);
-      setTimeAttackLimit(data.timeAttackLimit ?? 60);
-      
-      unlockAudio();
-      if (musicOn) startMusic();
-      setStarted(true);
-      setHasSavedGame(false);
-    } catch (e) {
-      console.error("Error loading saved game:", e);
-      localStorage.removeItem("cbb_saved_game");
-      setHasSavedGame(false);
-    }
-  };
-
-  const discardSavedGame = () => {
-    localStorage.removeItem("cbb_saved_game");
-    setHasSavedGame(false);
-  };
-
-  // Tray is randomized on the client only (avoids SSR hydration mismatch).
-  useEffect(() => {
-    setTray((t) => (t.length === 0 ? newTray() : t));
-  }, []);
-
-
-  const boardRef = useRef<HTMLDivElement | null>(null);
-  type DragState = {
-    piece: Piece;
-    slot: number;
-    px: number;
-    py: number;
-    cell: { x: number; y: number } | null;
-    valid: boolean;
-  };
-  const [drag, setDrag] = useState<DragState | null>(null);
-  const dragRef = useRef<DragState | null>(null);
-  const floatingRef = useRef<HTMLDivElement | null>(null);
-  const boardRectRef = useRef<{ left: number; top: number } | null>(null);
-  const [cellSize, setCellSize] = useState(40);
-
-  useEffect(() => {
-    const updateSize = () => {
-      const el = boardRef.current;
-      if (el) {
-        setCellSize(el.getBoundingClientRect().width / SIZE);
-      }
-    };
-    updateSize();
-    const t = setTimeout(updateSize, 100);
-    window.addEventListener("resize", updateSize);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("resize", updateSize);
-    };
-  }, []);
-
+    return () => clearInterval(id);
+  }, [screen, mode, status]);
 
   const pushToast = useCallback((text: string, sub?: string) => {
     const id = ++fxSeq;
@@ -205,160 +121,122 @@ export function CandyBlockBlast() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 1100);
   }, []);
 
-  const startLevel = useCallback((idx: number) => {
-    const lv = makeLevel(idx);
-    setLevelIdx(idx);
-    localStorage.setItem("cbb_level", String(idx));
-    setBoard(emptyBoard());
-    setTray(newTray());
-    setMoves(lv.moves);
-    setCollected(0);
-    setCombo(0);
-    setClearing(new Set());
-    setStatus("playing");
-  }, []);
-
-  const restart = useCallback(() => {
-    setScore(0);
-    if (gameMode === "levels") {
-      startLevel(levelIdx);
-    } else if (gameMode === "timeattack") {
+  const startRound = useCallback(
+    (m: Mode, secs: number, idx = 1, keepScore = false) => {
+      const lv = makeLevel(idx);
+      setLevelIdx(idx);
       setBoard(emptyBoard());
       setTray(newTray());
-      setMoves(9999);
-      setCollected(0);
-      setCombo(0);
-      setClearing(new Set());
-      setTimeLeft(timeAttackLimit);
-      setStatus("playing");
-    } else {
-      setBoard(emptyBoard());
-      setTray(newTray());
-      setMoves(9999);
-      setCollected(0);
-      setCombo(0);
-      setClearing(new Set());
-      setStatus("playing");
-    }
-  }, [gameMode, levelIdx, startLevel, timeAttackLimit]);
-
-  const beginGame = (mode: "levels" | "endless" | "timeattack") => {
-    setGameMode(mode);
-    unlockAudio();
-    if (musicOn) startMusic();
-
-    setScore(0);
-    setBoard(emptyBoard());
-    setTray(newTray());
-    setCombo(0);
-    setClearing(new Set());
-    setStatus("playing");
-
-    if (mode === "levels") {
-      const storedLevel = Number(localStorage.getItem("cbb_level") ?? 1);
-      const lv = makeLevel(storedLevel);
-      setLevelIdx(storedLevel);
       setMoves(lv.moves);
       setCollected(0);
-    } else if (mode === "timeattack") {
-      setMoves(9999);
-      setCollected(0);
-      setTimeLeft(timeAttackLimit);
-    } else {
-      setMoves(9999);
-      setCollected(0);
-    }
+      setCombo(0);
+      setTimeLeft(secs);
+      setClearing(new Set());
+      setStatus("playing");
+      if (!keepScore) setScore(0);
+    },
+    [],
+  );
 
-    setStarted(true);
+  const beginGame = () => {
+    unlockAudio();
+    if (musicOn) startMusic();
+    setBest(readBest(mode, seconds));
+    startRound(mode, seconds);
+    setScreen("game");
   };
 
-  const returnToMenu = () => {
-    stopMusic();
-    setStarted(false);
+  const backToMenu = () => {
+    setScreen("menu");
     setStatus("playing");
   };
 
-  /* ── Drag handling ─────────────────────────────────────────── */
-  const cellFromPointer = useCallback((piece: Piece, px: number, py: number) => {
-    let r = boardRectRef.current;
-    if (!r) {
-      const el = boardRef.current;
-      if (!el) return null;
-      const rect = el.getBoundingClientRect();
-      r = { left: rect.left, top: rect.top };
-    }
-    const cs = cellSize;
-    let gx = Math.round((px - r.left - (piece.shape.w * cs) / 2) / cs);
-    let gy = Math.round((py - r.top - cs * 1.6 - (piece.shape.h * cs) / 2) / cs);
-    if (gx < -3 || gy < -3 || gx > SIZE + 2 || gy > SIZE + 2) return null;
-    // forgiving snap: keep the piece fully inside the grid
-    gx = Math.min(Math.max(gx, 0), SIZE - piece.shape.w);
-    gy = Math.min(Math.max(gy, 0), SIZE - piece.shape.h);
+  /* ── Drag handling (rAF, transform-only for 60fps) ─────────────── */
+  const computeCell = (core: DragCore, px: number, py: number) => {
+    const r = rectRef.current;
+    if (!r) return null;
+    const cs = core.cellSize;
+    let gx = Math.round((px - core.offX - (r.left + 6)) / cs);
+    let gy = Math.round((py - core.offY - (r.top + 6)) / cs);
+    if (gx < -1.5 || gy < -1.5 || gx > SIZE + 0.5 || gy > SIZE + 0.5) return null;
+    gx = Math.min(Math.max(gx, 0), SIZE - core.piece.shape.w);
+    gy = Math.min(Math.max(gy, 0), SIZE - core.piece.shape.h);
     return { x: gx, y: gy };
-  }, [cellSize]);
+  };
 
+  const flush = () => {
+    rafRef.current = null;
+    const core = coreRef.current;
+    const p = pendingRef.current;
+    if (!core || !p) return;
+    const cell = computeCell(core, p.x, p.y);
+    const valid = cell ? canPlaceAt(boardStateRef.current, core.piece, cell.x, cell.y) : false;
+    if (floatRef.current) {
+      const r = rectRef.current;
+      // snap the floating piece onto the highlighted cells (mobile-game feel)
+      const tx = cell && r ? r.left + 6 + cell.x * core.cellSize : p.x - core.offX;
+      const ty = cell && r ? r.top + 6 + cell.y * core.cellSize : p.y - core.offY;
+      floatRef.current.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+    }
+    const prev = viewRef.current;
+    if (
+      !prev ||
+      prev.valid !== valid ||
+      prev.cell?.x !== cell?.x ||
+      prev.cell?.y !== cell?.y ||
+      (!prev.cell) !== (!cell)
+    ) {
+      const next = { piece: core.piece, slot: core.slot, cell, valid };
+      viewRef.current = next;
+      setDragView(next);
+    }
+  };
 
   const onPiecePointerDown = (piece: Piece, slot: number) => (e: React.PointerEvent) => {
-    if (status !== "playing") return;
+    if (status !== "playing" || coreRef.current) return;
     e.preventDefault();
     unlockAudio();
     sfx.pick();
-    
-    // Cache the board bounds on pointer down to prevent layout thrashing during moves
     const el = boardRef.current;
-    if (el) {
-      const r = el.getBoundingClientRect();
-      boardRectRef.current = { left: r.left, top: r.top };
-    }
-
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    const d: DragState = { piece, slot, px: e.clientX, py: e.clientY, cell: null, valid: false };
-    dragRef.current = d;
-    setDrag(d);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    rectRef.current = r;
+    const cs = (r.width - 9) / SIZE; // cell pitch incl. 3px gap
+    // grab point: center of piece horizontally, lifted above the finger
+    const core: DragCore = {
+      piece,
+      slot,
+      cellSize: cs,
+      offX: (piece.shape.w * cs) / 2,
+      offY: piece.shape.h * cs + cs * 0.55,
+    };
+    coreRef.current = core;
+    const view = { piece, slot, cell: null, valid: false };
+    viewRef.current = view;
+    setDragView(view);
+    pendingRef.current = { x: e.clientX, y: e.clientY };
+    flush();
   };
 
   useEffect(() => {
-    dragRef.current = drag;
-  }, [drag]);
-
-  useEffect(() => {
-    if (!drag) return;
     const move = (e: PointerEvent) => {
+      if (!coreRef.current) return;
       e.preventDefault();
-      
-      if (floatingRef.current) {
-        floatingRef.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY - cellSize * 1.6}px, 0) translate(-50%, -50%)`;
-      }
-
-      const currentDrag = dragRef.current;
-      if (!currentDrag) return;
-      
-      const cell = cellFromPointer(currentDrag.piece, e.clientX, e.clientY);
-      const valid = cell ? canPlaceAt(board, currentDrag.piece, cell.x, cell.y) : false;
-      
-      currentDrag.px = e.clientX;
-      currentDrag.py = e.clientY;
-      
-      const cellChanged = cell?.x !== currentDrag.cell?.x || cell?.y !== currentDrag.cell?.y;
-      const validityChanged = valid !== currentDrag.valid;
-      
-      if (cellChanged || validityChanged) {
-        currentDrag.cell = cell;
-        currentDrag.valid = valid;
-        
-        setDrag((d) => {
-          if (!d) return d;
-          return { ...d, cell, valid };
-        });
-      }
+      pendingRef.current = { x: e.clientX, y: e.clientY };
+      if (rafRef.current === null) rafRef.current = requestAnimationFrame(flush);
     };
     const up = () => {
-      const d = dragRef.current;
-      dragRef.current = null;
-      setDrag(null);
-      if (d) commit(d);
+      const core = coreRef.current;
+      const view = viewRef.current;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      coreRef.current = null;
+      viewRef.current = null;
+      setDragView(null);
+      if (core && view) commitRef.current(core, view);
     };
-
     window.addEventListener("pointermove", move, { passive: false });
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
@@ -368,7 +246,15 @@ export function CandyBlockBlast() {
       window.removeEventListener("pointercancel", up);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag !== null, board, cellFromPointer, cellSize]);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (dragView && floatRef.current && pendingRef.current && coreRef.current) {
+      const p = pendingRef.current;
+      const c = coreRef.current;
+      floatRef.current.style.transform = `translate3d(${p.x - c.offX}px, ${p.y - c.offY}px, 0)`;
+    }
+  }, [dragView]);
 
   const spawnSparkles = (indices: number[], b: Board) => {
     const el = boardRef.current;
@@ -383,11 +269,10 @@ export function CandyBlockBlast() {
       for (let k = 0; k < 3; k++) {
         parts.push({
           id: ++fxSeq,
-          kind: "sparkle",
           x: cx,
           y: cy,
-          dx: (Math.random() - 0.5) * 120,
-          dy: (Math.random() - 0.5) * 120,
+          dx: (Math.random() - 0.5) * 130,
+          dy: (Math.random() - 0.5) * 130,
           candy,
         });
       }
@@ -396,17 +281,44 @@ export function CandyBlockBlast() {
     setTimeout(() => setFx((f) => f.filter((p) => !parts.includes(p))), 750);
   };
 
-  const commit = (d: NonNullable<typeof drag>) => {
-    if (!d.cell || !canPlaceAt(board, d.piece, d.cell.x, d.cell.y)) {
+  const finishMove = (nextBoard: Board, nextTray: Piece[], gainedTarget: number) => {
+    const stuck = !nextTray.some((p) => canPlaceAnywhere(nextBoard, p));
+    if (mode === "level") {
+      setMoves((m) => {
+        const left = m - 1;
+        if (collected + gainedTarget >= level.targetCount) {
+          sfx.levelUp();
+          setStatus("won");
+          return left;
+        }
+        if (left <= 0 || stuck) {
+          sfx.gameOver();
+          setStatus("lost");
+        }
+        return left;
+      });
+      return;
+    }
+    if (stuck) {
+      sfx.gameOver();
+      setStatus("lost");
+    }
+    if (mode === "time") setTimeLeft((t) => Math.min(t + 1, 999));
+  };
+
+  const commit = (core: DragCore, view: DragView) => {
+    const b = boardStateRef.current;
+    if (!view.cell || !canPlaceAt(b, core.piece, view.cell.x, view.cell.y)) {
       sfx.invalid();
       return;
     }
-    const res = placePiece(board, d.piece, d.cell.x, d.cell.y, combo);
+    const { x: cx, y: cy } = view.cell;
+    const res = placePiece(b, core.piece, cx, cy, combo);
     sfx.place();
 
-    const boardWithPiece = board.slice();
-    d.piece.shape.cells.forEach(([x, y]) => {
-      boardWithPiece[(d.cell!.y + y) * SIZE + (d.cell!.x + x)] = d.piece.candy;
+    const boardWithPiece = b.slice();
+    core.piece.shape.cells.forEach(([x, y]) => {
+      boardWithPiece[(cy + y) * SIZE + (cx + x)] = core.piece.candy;
     });
 
     const nextCombo = res.lines > 0 ? combo + 1 : 0;
@@ -414,8 +326,7 @@ export function CandyBlockBlast() {
     setScore((s) => s + res.gained);
     setCollected((c) => c + (res.collected[level.targetCandy] ?? 0));
 
-    // remaining tray
-    const restTray = tray.filter((_, i) => i !== d.slot);
+    const restTray = tray.filter((_, i) => i !== core.slot);
     const nextTray = restTray.length === 0 ? newTray() : restTray;
 
     if (res.lines > 0) {
@@ -443,137 +354,68 @@ export function CandyBlockBlast() {
     }
     setTray(nextTray);
   };
-
-  const finishMove = (nextBoard: Board, nextTray: Piece[], gainedTarget: number) => {
-    if (gameMode === "endless") {
-      const stuck = !nextTray.some((p) => canPlaceAnywhere(nextBoard, p));
-      if (stuck) {
-        sfx.gameOver();
-        setStatus("lost");
-      }
-    } else {
-      setMoves((m) => {
-        const left = m - 1;
-        const totalCollected = collected + gainedTarget;
-        if (totalCollected >= level.targetCount) {
-          sfx.levelUp();
-          setStatus("won");
-          return left;
-        }
-        const stuck = !nextTray.some((p) => canPlaceAnywhere(nextBoard, p));
-        if (left <= 0 || stuck) {
-          sfx.gameOver();
-          setStatus("lost");
-        }
-        return left;
-      });
-    }
-  };
-
-  const cellSizePx = useCallback(() => {
-    return cellSize;
-  }, [cellSize]);
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
 
   const ghostCells = useMemo(() => {
-    if (!drag?.cell) return new Set<number>();
+    if (!dragView?.cell) return new Set<number>();
     const s = new Set<number>();
-    drag.piece.shape.cells.forEach(([x, y]) => {
-      const cx = drag.cell!.x + x;
-      const cy = drag.cell!.y + y;
-      if (cx >= 0 && cy >= 0 && cx < SIZE && cy < SIZE) s.add(cy * SIZE + cx);
+    dragView.piece.shape.cells.forEach(([x, y]) => {
+      const gx = dragView.cell!.x + x;
+      const gy = dragView.cell!.y + y;
+      if (gx >= 0 && gy >= 0 && gx < SIZE && gy < SIZE) s.add(gy * SIZE + gx);
     });
     return s;
-  }, [drag]);
+  }, [dragView]);
+
+  const dragCell = coreRef.current?.cellSize ?? 40;
 
   return (
     <div
-      className="relative flex min-h-screen w-full flex-col items-center overflow-hidden animate-fade-in touch-none select-none"
+      className={`relative flex min-h-screen w-full flex-col items-center overflow-hidden ${theme.className}`}
       style={{
-        backgroundImage: `url(${bgImage})`,
+        backgroundImage: themeId === "candy" ? `url(${bgImage})` : "var(--scene-bg)",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
     >
-      <div className="absolute inset-0 bg-sky/10" aria-hidden="true" />
-
       <div className="relative z-10 flex w-full max-w-md flex-1 flex-col gap-3 px-3 pt-3 pb-5">
         <Hud
+          mode={mode}
           score={score}
+          best={best}
           targetCandy={level.targetCandy}
           collected={collected}
           targetCount={level.targetCount}
           moves={moves}
           level={levelIdx}
-          gameMode={gameMode}
-          best={best}
-          combo={combo}
           timeLeft={timeLeft}
-          timeLimit={timeAttackLimit}
+          combo={combo}
         />
 
-        <div className="mt-2 flex items-center justify-between">
-          <div
-            className="rounded-2xl px-3 py-1.5 font-display text-xs font-extrabold text-panel-foreground"
-            style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-          >
-            EN İYİ: {best.toLocaleString("tr-TR")}
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setSoundOn((v) => {
-                  setSfx(!v);
-                  return !v;
-                });
-              }}
-              aria-label="Ses efektleri"
-              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-              style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-            >
-              {soundOn ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMusicOn((v) => {
-                  setMusic(!v);
-                  return !v;
-                });
-              }}
-              aria-label="Müzik"
-              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-              style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-            >
-              {musicOn ? <Music className="size-5" /> : <Music2 className="size-5 opacity-50" />}
-            </button>
-            <button
-              type="button"
-              onClick={restart}
-              aria-label="Yeniden başla"
-              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-              style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-            >
-              <RotateCcw className="size-5" />
-            </button>
-            <button
-              type="button"
-              onClick={returnToMenu}
-              aria-label="Menüye Dön"
-              className="flex size-9 items-center justify-center rounded-full text-base cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-              style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-            >
-              <Home className="size-5" />
-            </button>
-          </div>
+        <div className="mt-2 flex items-center justify-end gap-2">
+          <IconButton label="Ses efektleri" onClick={() => setSoundOn((v) => (setSfx(!v), !v))}>
+            {soundOn ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
+          </IconButton>
+          <IconButton label="Müzik" onClick={() => setMusicOn((v) => (setMusic(!v), !v))}>
+            {musicOn ? <Music className="size-5" /> : <Music2 className="size-5 opacity-50" />}
+          </IconButton>
+          <IconButton label="Yeniden başla" onClick={() => startRound(mode, seconds, 1)}>
+            <RotateCcw className="size-5" />
+          </IconButton>
+          <IconButton label="Menü" onClick={backToMenu}>
+            <Home className="size-5" />
+          </IconButton>
         </div>
 
         {/* Board */}
         <div className="relative">
           <div
             ref={boardRef}
-            className="relative grid aspect-square w-full grid-cols-8 gap-[3px] rounded-3xl bg-boardbg p-[6px]"
-            style={{ boxShadow: "0 8px 0 oklch(0.3 0.06 265 / 0.6), 0 16px 32px oklch(0.2 0.05 280 / 0.4)" }}
+            className="relative grid aspect-square w-full touch-none grid-cols-8 gap-[3px] rounded-3xl bg-boardbg p-[6px]"
+            style={{
+              boxShadow: "0 8px 0 oklch(0.3 0.06 265 / 0.5), 0 16px 32px oklch(0.2 0.05 280 / 0.35)",
+            }}
           >
             {board.map((cell, i) => {
               const isGhost = ghostCells.has(i);
@@ -585,7 +427,7 @@ export function CandyBlockBlast() {
                   style={
                     isGhost
                       ? {
-                          outline: `2px solid ${drag?.valid ? "var(--gold)" : "var(--destructive)"}`,
+                          outline: `2px solid ${dragView?.valid ? "var(--gold)" : "var(--destructive)"}`,
                           outlineOffset: "-1px",
                         }
                       : undefined
@@ -597,14 +439,13 @@ export function CandyBlockBlast() {
                       className={`absolute inset-[6%] ${isClearing ? "anim-blast" : "anim-pop"}`}
                     />
                   )}
-                  {cell === null && isGhost && drag && (
-                    <Candy id={drag.piece.candy} className="absolute inset-[10%] opacity-40" />
+                  {cell === null && isGhost && dragView && (
+                    <Candy id={dragView.piece.candy} className="absolute inset-[10%] opacity-40" />
                   )}
                 </div>
               );
             })}
 
-            {/* sparkle particles */}
             <div className="pointer-events-none absolute inset-0 overflow-visible">
               {fx.map((p) => (
                 <span
@@ -616,7 +457,7 @@ export function CandyBlockBlast() {
                       top: p.y,
                       "--dx": `${p.dx}px`,
                       "--dy": `${p.dy}px`,
-                      background: `var(--candy-${p.candy}b)`,
+                      background: `var(--candy-${p.candy}b, var(--candy-${p.candy}))`,
                       boxShadow: `0 0 8px var(--candy-${p.candy})`,
                     } as React.CSSProperties
                   }
@@ -624,7 +465,6 @@ export function CandyBlockBlast() {
               ))}
             </div>
 
-            {/* combo toasts */}
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1">
               {toasts.map((t) => (
                 <div key={t.id} className="anim-combo text-center">
@@ -647,25 +487,21 @@ export function CandyBlockBlast() {
 
         {/* Tray */}
         <div
-          className="mt-1 grid grid-cols-3 items-center gap-2 rounded-3xl bg-boardbg p-3 h-24"
-          style={{ boxShadow: "0 6px 0 oklch(0.3 0.06 265 / 0.5)" }}
+          className="mt-1 grid grid-cols-3 items-center gap-2 rounded-3xl bg-boardbg p-3"
+          style={{ boxShadow: "0 6px 0 oklch(0.3 0.06 265 / 0.4)" }}
         >
           {[0, 1, 2].map((slot) => {
             const piece = tray[slot];
-            if (!piece) return <div key={slot} className="h-full" />;
-            const dragging = drag?.slot === slot;
+            if (!piece) return <div key={slot} className="h-20" />;
+            const dragging = dragView?.slot === slot;
             const placeable = canPlaceAnywhere(board, piece);
-            
-            // Calculate dynamic unit sizes to prevent large shapes from overflowing the tray box
-            const maxDim = Math.max(piece.shape.w, piece.shape.h);
-            const unit = maxDim >= 5 ? 13 : maxDim >= 4 ? 17 : maxDim >= 3 ? 22 : 26;
-
+            const unit = Math.min(26, 74 / Math.max(piece.shape.w, piece.shape.h));
             return (
               <div
                 key={piece.uid}
                 onPointerDown={onPiecePointerDown(piece, slot)}
-                className={`flex h-full cursor-grab touch-none items-center justify-center rounded-2xl transition-all ${
-                  dragging ? "opacity-25" : placeable ? "anim-wobble opacity-100" : "opacity-40"
+                className={`flex h-20 cursor-grab touch-none items-center justify-center rounded-2xl select-none ${
+                  dragging ? "opacity-20" : placeable ? "anim-wobble opacity-100" : "opacity-40"
                 }`}
               >
                 <div
@@ -676,8 +512,8 @@ export function CandyBlockBlast() {
                     <Candy
                       key={`${x}-${y}`}
                       id={piece.candy}
-                      className="absolute pointer-events-none"
-                      style={{ left: x * unit, top: y * unit, width: unit - 2, height: unit - 2 }}
+                      className="absolute"
+                      style={{ left: x * unit, top: y * unit, width: unit - 2.5, height: unit - 2.5 }}
                     />
                   ))}
                 </div>
@@ -692,159 +528,204 @@ export function CandyBlockBlast() {
       </div>
 
       {/* Floating dragged piece */}
-      {drag && (
+      {dragView && (
         <div
-          ref={floatingRef}
-          className="pointer-events-none fixed z-50"
+          ref={floatRef}
+          className="pointer-events-none fixed top-0 left-0 z-50 will-change-transform"
           style={{
-            left: 0,
-            top: 0,
-            transform: `translate3d(${drag.px}px, ${drag.py - cellSizePx() * 1.6}px, 0) translate(-50%, -50%)`,
-            willChange: "transform",
+            width: dragView.piece.shape.w * dragCell,
+            height: dragView.piece.shape.h * dragCell,
           }}
         >
-          <div
-            className="relative"
-            style={{
-              width: drag.piece.shape.w * cellSizePx(),
-              height: drag.piece.shape.h * cellSizePx(),
-            }}
-          >
-            {drag.piece.shape.cells.map(([x, y]) => (
-              <Candy
-                key={`${x}-${y}`}
-                id={drag.piece.candy}
-                className="absolute"
-                style={{
-                  left: x * cellSizePx(),
-                  top: y * cellSizePx(),
-                  width: cellSizePx() - 3,
-                  height: cellSizePx() - 3,
-                }}
-              />
-            ))}
-          </div>
+          {dragView.piece.shape.cells.map(([x, y]) => (
+            <Candy
+              key={`${x}-${y}`}
+              id={dragView.piece.candy}
+              className="absolute"
+              style={{
+                left: x * dragCell,
+                top: y * dragCell,
+                width: dragCell - 3,
+                height: dragCell - 3,
+              }}
+            />
+          ))}
         </div>
       )}
 
-      {/* Overlays */}
-      {!started && hasSavedGame ? (
+      {/* Menu / overlays */}
+      {screen === "menu" && (
         <Overlay>
           <Title />
-          <div className="font-display text-xl font-black text-panel-foreground text-center mt-4">
-            YARIM KALAN OYUN VAR!
-          </div>
-          <p className="mt-3 max-w-xs text-center font-display text-sm font-bold text-panel-foreground/80 leading-normal">
-            Kapatmadan önce yarım kalan bir oyunun olduğunu fark ettik. Kaldığın yerden devam etmek ister misin?
-          </p>
-          
-          <div className="flex flex-col w-full gap-3 mt-6">
-            <BigButton onClick={resumeSavedGame}>
-              DEVAM ET
-            </BigButton>
-            <button 
-              onClick={discardSavedGame}
-              className="mt-3 text-panel-foreground/80 font-display text-sm font-extrabold hover:text-panel-foreground cursor-pointer"
-            >
-              Yeni Oyun Başlat (Kaydı Sil)
-            </button>
-          </div>
-        </Overlay>
-      ) : !started && (
-        <Overlay>
-          <Title />
-          <p className="mt-3 max-w-xs text-center font-display text-sm font-bold text-panel-foreground leading-normal">
-            Şeker bloklarını ızgaraya yerleştir, satırları patlat, en yüksek skora ulaş!
-          </p>
-          
-          <div className="flex flex-col w-full gap-3 mt-5">
-            <BigButton onClick={() => beginGame("levels")}>
-              SEVİYELİ MOD (Seviye {levelIdx})
-            </BigButton>
-            <BigButton onClick={() => beginGame("endless")}>
-              SINIRSIZ MOD
-            </BigButton>
-            
-            <div className="flex flex-col w-full gap-2 rounded-2xl p-2 border border-panel-foreground/10 bg-black/10">
-              <BigButton onClick={() => beginGame("timeattack")} className="bg-gradient-to-r from-purple-600 to-indigo-600">
-                ZAMANA KARŞI MODU
-              </BigButton>
-              
-              <div className="flex items-center justify-between px-3 py-1 text-panel-foreground font-display font-extrabold text-sm">
-                <span>Süre Ayarı:</span>
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => setTimeAttackLimit(prev => Math.max(30, prev - 30))}
-                    className="size-8 rounded-full bg-black/30 flex items-center justify-center hover:bg-black/50 text-xl font-bold cursor-pointer select-none text-panel-foreground"
-                  >
-                    -
-                  </button>
-                  <span className="text-base tracking-wider min-w-[3.5rem] text-center" style={{ color: "var(--gold)" }}>
-                    {formatTime(timeAttackLimit)}
-                  </span>
-                  <button 
-                    onClick={() => setTimeAttackLimit(prev => Math.min(300, prev + 30))}
-                    className="size-8 rounded-full bg-black/30 flex items-center justify-center hover:bg-black/50 text-xl font-bold cursor-pointer select-none text-panel-foreground"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
+          <div className="mt-4 w-full">
+            <SectionLabel>Mod</SectionLabel>
+            <div className="grid gap-2">
+              {MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMode(m.id)}
+                  className={`flex items-center justify-between rounded-2xl px-4 py-2.5 text-left font-display font-extrabold transition-transform active:scale-[0.98] ${
+                    mode === m.id ? "text-accent-foreground" : "text-panel-foreground"
+                  }`}
+                  style={{
+                    background: mode === m.id ? "var(--gradient-gold)" : "var(--color-secondary)",
+                    boxShadow: mode === m.id ? "var(--shadow-candy)" : undefined,
+                  }}
+                >
+                  <span>{m.name}</span>
+                  <span className="text-[11px] font-bold opacity-75">{m.desc}</span>
+                </button>
+              ))}
             </div>
+
+            {mode === "time" && (
+              <>
+                <SectionLabel>Süre</SectionLabel>
+                <div className="flex flex-wrap gap-2">
+                  {TIME_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSeconds(s)}
+                      className={`rounded-full px-3 py-1.5 font-display text-sm font-extrabold ${
+                        seconds === s ? "text-accent-foreground" : "text-panel-foreground"
+                      }`}
+                      style={{
+                        background:
+                          seconds === s ? "var(--gradient-gold)" : "var(--color-secondary)",
+                      }}
+                    >
+                      {s < 60 ? `${s} sn` : `${s / 60} dk`}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <SectionLabel>Tema</SectionLabel>
+            <div className="grid grid-cols-2 gap-2">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setThemeId(t.id)}
+                  className={`rounded-2xl px-3 py-2 text-left font-display text-sm font-extrabold ${
+                    themeId === t.id ? "text-accent-foreground" : "text-panel-foreground"
+                  }`}
+                  style={{
+                    background: themeId === t.id ? "var(--gradient-gold)" : "var(--color-secondary)",
+                    boxShadow: themeId === t.id ? "var(--shadow-candy)" : undefined,
+                  }}
+                >
+                  <span className="mb-1 flex gap-1">
+                    {t.swatch.map((c) => (
+                      <span
+                        key={c}
+                        className="size-3 rounded-full"
+                        style={{ background: c, boxShadow: "inset 0 -1px 2px rgb(0 0 0 / 0.3)" }}
+                      />
+                    ))}
+                  </span>
+                  {t.name}
+                  <span className="block text-[10px] font-bold opacity-75">{t.desc}</span>
+                </button>
+              ))}
+            </div>
+
+            <p className="mt-3 text-center font-display text-[11px] font-bold text-panel-foreground/80">
+              Rekor ({mode === "time" ? `${seconds} sn` : "genel"}):{" "}
+              {best.toLocaleString("tr-TR")} · İnternet gerekmez
+            </p>
           </div>
+          <BigButton onClick={beginGame}>OYNA</BigButton>
         </Overlay>
       )}
 
-      {status === "won" && (
+      {screen === "game" && status === "won" && (
         <Overlay>
-          <div className="font-display text-4xl font-extrabold text-outline" style={{ color: "var(--gold)" }}>
+          <div
+            className="font-display text-4xl font-extrabold text-outline"
+            style={{ color: "var(--gold)" }}
+          >
             SEVİYE {levelIdx} TAMAM!
           </div>
           <p className="mt-2 font-display text-lg font-extrabold text-panel-foreground">
             Puan: {score.toLocaleString("tr-TR")}
           </p>
-          <BigButton onClick={() => startLevel(levelIdx + 1)}>SONRAKİ SEVİYE</BigButton>
-          <button 
-            onClick={returnToMenu}
-            className="mt-3 text-panel-foreground/80 font-display text-sm font-extrabold hover:text-panel-foreground cursor-pointer"
-          >
-            Menüye Dön
-          </button>
+          <BigButton onClick={() => startRound(mode, seconds, levelIdx + 1, true)}>
+            SONRAKİ SEVİYE
+          </BigButton>
+          <TextButton onClick={backToMenu}>Menüye dön</TextButton>
         </Overlay>
       )}
 
-      {status === "lost" && (
+      {screen === "game" && status === "lost" && (
         <Overlay>
-          <div className="font-display text-4xl font-extrabold text-outline" style={{ color: "var(--gold)" }}>
-            {gameMode === "timeattack" && timeLeft === 0 ? "SÜRE BİTTİ!" : "OYUN BİTTİ"}
-          </div>
-          <p className="mt-2 font-display text-lg font-extrabold text-panel-foreground text-center">
-            {gameMode === "timeattack" && timeLeft === 0 ? (
-              <span>Zamana Karşı ({formatTime(timeAttackLimit)}) skoru</span>
-            ) : (
-              <span>Skorunuz</span>
-            )}
-            <br />
-            Puan: {score.toLocaleString("tr-TR")} · Rekor: {best.toLocaleString("tr-TR")}
-          </p>
-          <BigButton onClick={restart}>TEKRAR DENE</BigButton>
-          <button 
-            onClick={returnToMenu}
-            className="mt-3 text-panel-foreground/80 font-display text-sm font-extrabold hover:text-panel-foreground cursor-pointer"
+          <div
+            className="font-display text-4xl font-extrabold text-outline"
+            style={{ color: "var(--gold)" }}
           >
-            Menüye Dön
-          </button>
+            {mode === "time" ? "SÜRE BİTTİ" : "OYUN BİTTİ"}
+          </div>
+          <p className="mt-2 text-center font-display text-lg font-extrabold text-panel-foreground">
+            Puan: {score.toLocaleString("tr-TR")}
+            <br />
+            <span className="text-sm opacity-80">Rekor: {best.toLocaleString("tr-TR")}</span>
+          </p>
+          <BigButton onClick={() => startRound(mode, seconds, 1)}>TEKRAR DENE</BigButton>
+          <TextButton onClick={backToMenu}>Menüye dön</TextButton>
         </Overlay>
       )}
+
+      <MusicSync on={musicOn && screen === "game"} />
+    </div>
+  );
+}
+
+function MusicSync({ on }: { on: boolean }) {
+  useEffect(() => {
+    if (on) startMusic();
+    else stopMusic();
+  }, [on]);
+  return null;
+}
+
+function IconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex size-9 items-center justify-center rounded-full text-panel-foreground active:scale-95"
+      style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-3 mb-1.5 font-display text-[11px] font-extrabold tracking-widest uppercase text-panel-foreground/80">
+      {children}
     </div>
   );
 }
 
 function Overlay({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-foreground/45 px-6 backdrop-blur-sm animate-fade-in">
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center overflow-y-auto bg-foreground/45 px-5 py-6 backdrop-blur-sm">
       <div
-        className="flex w-full max-w-sm flex-col items-center rounded-[2rem] p-6 transition-all"
+        className="flex w-full max-w-sm flex-col items-center rounded-[2rem] p-5"
         style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-panel)" }}
       >
         {children}
@@ -853,9 +734,9 @@ function Overlay({ children }: { children: React.ReactNode }) {
   );
 }
 
-const Title = React.memo(function Title() {
+function Title() {
   return (
-    <h1 className="text-center font-display text-5xl leading-none font-extrabold">
+    <h1 className="text-center font-display text-4xl leading-none font-extrabold">
       <span className="text-outline block" style={{ color: "var(--candy-5)" }}>
         CANDY
       </span>
@@ -864,15 +745,27 @@ const Title = React.memo(function Title() {
       </span>
     </h1>
   );
-});
+}
 
 function BigButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full px-6 py-3 font-display text-lg font-extrabold text-accent-foreground transition-transform hover:scale-102 active:scale-98 cursor-pointer"
+      className="mt-4 rounded-full px-9 py-3 font-display text-xl font-extrabold text-accent-foreground transition-transform active:scale-95"
       style={{ background: "var(--gradient-gold)", boxShadow: "var(--shadow-candy)" }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TextButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-2 font-display text-sm font-extrabold text-panel-foreground/80 underline"
     >
       {children}
     </button>

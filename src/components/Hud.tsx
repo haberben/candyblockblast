@@ -1,205 +1,100 @@
 import React from "react";
 import { Candy } from "./Candy";
-import { type CandyId } from "@/lib/game";
-
-type HudProps = {
-  score: number;
-  targetCandy: CandyId;
-  collected: number;
-  targetCount: number;
-  moves: number;
-  level: number;
-  gameMode: "levels" | "endless" | "timeattack";
-  best: number;
-  combo: number;
-  timeLeft?: number;
-  timeLimit?: number;
-};
-
-const formatTime = (seconds: number) => {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s < 10 ? "0" : ""}${s}`;
-};
+import type { CandyId } from "@/lib/game";
+import type { Mode } from "@/lib/modes";
 
 export const Hud = React.memo(function Hud({
+  mode,
   score,
+  best,
   targetCandy,
   collected,
   targetCount,
   moves,
   level,
-  gameMode,
-  best,
+  timeLeft,
   combo,
-  timeLeft = 60,
-  timeLimit = 60,
-}: HudProps) {
-  if (gameMode === "timeattack") {
-    const isLowTime = timeLeft <= 10;
-    return (
-      <div className="flex flex-col items-center w-full gap-2">
-        {/* Three stat boxes */}
-        <div className="grid grid-cols-3 w-full gap-2">
-          {/* Score */}
-          <div
-            className="flex flex-col items-center justify-center p-3 rounded-2xl text-panel-foreground"
-            style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-          >
-            <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85 font-display">PUAN</span>
-            <span className="text-xl font-black font-display text-outline" style={{ color: "var(--gold)" }}>
-              {score.toLocaleString("tr-TR")}
-            </span>
-          </div>
-
-          {/* Time Left */}
-          <div
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl text-panel-foreground transition-all duration-300 ${
-              isLowTime ? "animate-pulse border-2 border-red-500 bg-red-950/70" : ""
-            }`}
-            style={{
-              background: isLowTime ? undefined : "var(--gradient-hud)",
-              boxShadow: "var(--shadow-candy)",
-            }}
-          >
-            <span className={`text-[10px] font-extrabold uppercase tracking-wider opacity-85 font-display ${isLowTime ? "text-red-400" : ""}`}>
-              SÜRE
-            </span>
-            <span
-              className="text-xl font-black font-display text-outline"
-              style={{ color: isLowTime ? "oklch(0.63 0.23 20)" : "var(--gold)" }}
-            >
-              {formatTime(timeLeft)}
-            </span>
-          </div>
-
-          {/* Time Attack Best */}
-          <div
-            className="flex flex-col items-center justify-center p-3 rounded-2xl text-panel-foreground"
-            style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-          >
-            <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85 font-display">REKOR</span>
-            <span className="text-xl font-black font-display text-outline" style={{ color: "var(--gold)" }}>
-              {best.toLocaleString("tr-TR")}
-            </span>
-          </div>
-        </div>
-
-        {/* Mode badge */}
-        <div
-          className="rounded-full px-5 py-1 text-xs font-black font-display text-outline tracking-wider"
-          style={{
-            background: "linear-gradient(135deg, oklch(0.6 0.22 290), oklch(0.45 0.2 280))",
-            boxShadow: "var(--shadow-candy)",
-            color: "var(--primary-foreground)",
-          }}
-        >
-          ZAMANA KARŞI ({formatTime(timeLimit)})
-        </div>
-      </div>
-    );
-  }
-
-  if (gameMode === "endless") {
-    return (
-      <div className="flex flex-col items-center w-full gap-2">
-        {/* Three stat boxes */}
-        <div className="grid grid-cols-3 w-full gap-2">
-          {/* Score */}
-          <div
-            className="flex flex-col items-center justify-center p-3 rounded-2xl text-panel-foreground"
-            style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-          >
-            <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85 font-display">PUAN</span>
-            <span className="text-xl font-black font-display text-outline" style={{ color: "var(--gold)" }}>
-              {score.toLocaleString("tr-TR")}
-            </span>
-          </div>
-
-          {/* Endless Best */}
-          <div
-            className="flex flex-col items-center justify-center p-3 rounded-2xl text-panel-foreground"
-            style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-          >
-            <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85 font-display">REKOR</span>
-            <span className="text-xl font-black font-display text-outline" style={{ color: "var(--gold)" }}>
-              {best.toLocaleString("tr-TR")}
-            </span>
-          </div>
-
-          {/* Combo */}
-          <div
-            className="flex flex-col items-center justify-center p-3 rounded-2xl text-panel-foreground"
-            style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-          >
-            <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85 font-display">KOMBO</span>
-            <span className="text-xl font-black font-display text-outline" style={{ color: "var(--gold)" }}>
-              {combo > 0 ? `${combo}x` : "—"}
-            </span>
-          </div>
-        </div>
-
-        {/* Endless badge */}
-        <div
-          className="rounded-full px-5 py-1 text-xs font-black font-display text-outline tracking-wider"
-          style={{ background: "var(--gradient-gold)", boxShadow: "var(--shadow-candy)", color: "var(--primary-foreground)" }}
-        >
-          SINIRSIZ MOD
-        </div>
-      </div>
-    );
-  }
+}: {
+  mode: Mode;
+  score: number;
+  best: number;
+  targetCandy: CandyId;
+  collected: number;
+  targetCount: number;
+  moves: number;
+  level: number;
+  timeLeft: number;
+  combo: number;
+}) {
+  const pct = Math.min(100, (collected / targetCount) * 100);
+  const mm = Math.floor(timeLeft / 60);
+  const ss = String(timeLeft % 60).padStart(2, "0");
+  const low = mode === "time" && timeLeft <= 10;
 
   return (
-    <div className="flex flex-col items-center w-full gap-2">
-      {/* Three stat boxes */}
-      <div className="grid grid-cols-3 w-full gap-2">
-        {/* Score */}
-        <div
-          className="flex flex-col items-center justify-center p-3 rounded-2xl text-panel-foreground"
-          style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-        >
-          <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85 font-display">PUAN</span>
-          <span className="text-xl font-black font-display text-outline" style={{ color: "var(--gold)" }}>
-            {score.toLocaleString("tr-TR")}
-          </span>
+    <div
+      className="relative flex items-stretch gap-2 rounded-3xl px-3 py-2 text-panel-foreground"
+      style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-panel)" }}
+    >
+      <div className="flex-1 text-center">
+        <div className="font-display text-[11px] font-extrabold tracking-wider uppercase opacity-80">
+          Puan
         </div>
-
-        {/* Target */}
-        <div
-          className="flex flex-col items-center justify-center p-2 rounded-2xl text-panel-foreground relative min-w-0"
-          style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-        >
-          <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85 font-display mb-1">HEDEF</span>
-          <div className="flex items-center gap-1.5 justify-center w-full">
-            <div className="size-6 shrink-0 relative">
-              <Candy id={targetCandy} />
-            </div>
-            <span className="text-base font-black font-display text-outline" style={{ color: "var(--gold)" }}>
-              {collected}/{targetCount}
-            </span>
-          </div>
+        <div className="font-display text-2xl leading-tight font-extrabold tabular-nums">
+          {score.toLocaleString("tr-TR")}
         </div>
-
-        {/* Moves */}
-        <div
-          className="flex flex-col items-center justify-center p-3 rounded-2xl text-panel-foreground"
-          style={{ background: "var(--gradient-hud)", boxShadow: "var(--shadow-candy)" }}
-        >
-          <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85 font-display">HAMLE</span>
-          <span className="text-xl font-black font-display text-outline" style={{ color: "var(--gold)" }}>
-            {moves}
-          </span>
+        <div className="font-display text-[10px] font-bold opacity-70 tabular-nums">
+          rekor {best.toLocaleString("tr-TR")}
         </div>
       </div>
 
-      {/* Level Badge */}
+      {mode === "level" ? (
+        <div className="flex-[1.3] text-center">
+          <div className="font-display text-[11px] font-extrabold tracking-wider uppercase opacity-80">
+            Hedef
+          </div>
+          <div className="mt-0.5 flex items-center justify-center gap-1.5 rounded-full bg-secondary/70 px-2 py-1">
+            <Candy id={targetCandy} size={20} />
+            <span className="font-display text-base leading-none font-extrabold tabular-nums">
+              {Math.min(collected, targetCount)}/{targetCount}
+            </span>
+          </div>
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary/70">
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{ width: `${pct}%`, background: "var(--gradient-gold)" }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex-[1.3] text-center">
+          <div className="font-display text-[11px] font-extrabold tracking-wider uppercase opacity-80">
+            {mode === "time" ? "Süre" : "Kombo"}
+          </div>
+          <div
+            className={`font-display text-3xl leading-tight font-extrabold tabular-nums ${low ? "anim-pulse" : ""}`}
+            style={low ? { color: "var(--destructive)" } : undefined}
+          >
+            {mode === "time" ? `${mm}:${ss}` : `x${combo}`}
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 text-center">
+        <div className="font-display text-[11px] font-extrabold tracking-wider uppercase opacity-80">
+          {mode === "level" ? "Hamle" : "Zincir"}
+        </div>
+        <div className="font-display text-2xl leading-tight font-extrabold tabular-nums">
+          {mode === "level" ? moves : `x${combo}`}
+        </div>
+      </div>
+
       <div
-        className="rounded-full px-5 py-1 text-xs font-black font-display text-outline tracking-wider"
-        style={{ background: "var(--gradient-gold)", boxShadow: "var(--shadow-candy)", color: "var(--primary-foreground)" }}
+        className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-0.5 font-display text-[11px] font-extrabold whitespace-nowrap text-accent-foreground"
+        style={{ background: "var(--gradient-gold)", boxShadow: "var(--shadow-candy)" }}
       >
-        SEVİYE {level}
+        {mode === "level" ? `SEVİYE ${level}` : mode === "time" ? "ZAMANA KARŞI" : "SINIRSIZ"}
       </div>
     </div>
   );
-});
+})

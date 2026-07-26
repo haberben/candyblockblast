@@ -1,18 +1,24 @@
 import React from "react";
-import { cn } from "@/lib/utils";
-import { type CandyId } from "@/lib/game";
+import type { CandyId } from "@/lib/game";
 
-type CandyProps = {
+export const Candy = React.memo(function Candy({
+  id,
+  size,
+  className = "",
+  style,
+}: {
   id: CandyId;
+  size?: number;
   className?: string;
   style?: React.CSSProperties;
-};
-
-export const Candy = React.memo(function Candy({ id, className, style }: CandyProps) {
+}) {
   return (
     <div
-      className={cn("candy-base candy-shine w-full h-full", `c${id}`, className)}
-      style={style}
-    />
+      className={`candy-base candy-shine c${id} ${className}`}
+      style={{ width: size, height: size, ...style }}
+      aria-hidden="true"
+    >
+      <span className="cpat" />
+    </div>
   );
 });

@@ -1,4 +1,8 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* ── Candy Block Blast design system ─────────────────────────────── */
 
@@ -126,68 +130,213 @@
   position: relative;
   border-radius: 9999px;
   box-shadow:
-    inset 0 -3px 6px oklch(0 0 0 / 0.25),
-    inset 0 3px 6px oklch(1 0 0 / 0.5),
-    0 3px 6px oklch(0.2 0.05 300 / 0.35);
+    inset 0 -3px 7px oklch(0 0 0 / 0.28),
+    inset 0 3px 7px oklch(1 0 0 / 0.55),
+    0 3px 7px oklch(0.2 0.05 300 / 0.4);
   overflow: hidden;
 }
 
 .candy-shine::after {
   content: "";
   position: absolute;
-  left: 16%;
-  top: 10%;
-  width: 34%;
-  height: 24%;
+  left: 15%;
+  top: 9%;
+  width: 36%;
+  height: 26%;
   border-radius: 9999px;
-  background: linear-gradient(180deg, oklch(1 0 0 / 0.85), oklch(1 0 0 / 0));
+  background: linear-gradient(180deg, oklch(1 0 0 / 0.9), oklch(1 0 0 / 0));
   filter: blur(0.5px);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.cpat {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   pointer-events: none;
 }
 
+/* 0 · pembe lolipop */
 .c0 {
-  background:
-    radial-gradient(circle at 50% 50%, var(--candy-0b) 12%, transparent 14%),
-    repeating-conic-gradient(
-      from 0deg,
-      var(--candy-0b) 0deg 15deg,
-      var(--candy-0) 15deg 30deg
-    );
+  background: repeating-conic-gradient(
+    from 0deg,
+    var(--candy-0b) 0deg 26deg,
+    var(--candy-0) 26deg 52deg
+  );
 }
+.c0 .cpat {
+  background: radial-gradient(circle at 50% 50%, oklch(1 0 0 / 0.95) 0 14%, transparent 15%),
+    radial-gradient(circle at 50% 50%, transparent 0 44%, oklch(1 0 0 / 0.4) 45% 50%, transparent 51%);
+}
+
+/* 1 · kırmızı lolipop (spiral) */
 .c1 {
-  background:
-    radial-gradient(circle at 50% 50%, var(--candy-1b) 12%, transparent 14%),
-    repeating-conic-gradient(
-      from 0deg,
-      var(--candy-1b) 0deg 22.5deg,
-      var(--candy-1) 22.5deg 45deg
-    );
+  background: repeating-conic-gradient(
+    from 12deg,
+    oklch(0.98 0.02 20) 0deg 22deg,
+    var(--candy-1) 22deg 44deg
+  );
 }
+.c1 .cpat {
+  background: radial-gradient(circle at 50% 50%, var(--candy-1b) 0 18%, transparent 19%),
+    radial-gradient(circle at 50% 50%, transparent 0 33%, oklch(1 0 0 / 0.55) 34% 39%, transparent 40%);
+}
+
+/* 2 · yeşil çizgili jelibon kare */
 .c2 {
-  border-radius: 32%;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.4) 10%, transparent 12%),
-    linear-gradient(45deg, transparent 45%, rgba(255, 255, 255, 0.25) 45% 55%, transparent 55%),
-    linear-gradient(-45deg, transparent 45%, rgba(255, 255, 255, 0.25) 45% 55%, transparent 55%),
-    linear-gradient(150deg, var(--candy-2b), var(--candy-2));
+  border-radius: 28%;
+  background: repeating-linear-gradient(
+    48deg,
+    var(--candy-2b) 0 14%,
+    var(--candy-2) 14% 28%
+  );
 }
+.c2 .cpat {
+  background: radial-gradient(circle at 50% 50%, oklch(1 0 0 / 0.55) 0 12%, transparent 13%),
+    linear-gradient(180deg, oklch(1 0 0 / 0.35), transparent 45%);
+}
+
+/* 3 · sarı şekerleme (ışın desenli) */
 .c3 {
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 65%, rgba(255, 255, 255, 0.25) 15%, transparent 35%),
-    radial-gradient(circle at 50% 65%, transparent 45%, rgba(255, 255, 255, 0.25) 45% 55%, transparent 55%),
-    radial-gradient(circle at 34% 28%, var(--candy-3b), var(--candy-3) 75%);
+  background: repeating-conic-gradient(
+    from 0deg,
+    var(--candy-3b) 0deg 30deg,
+    var(--candy-3) 30deg 60deg
+  );
 }
+.c3 .cpat {
+  background: radial-gradient(circle at 50% 50%, oklch(1 0 0 / 0.9) 0 16%, transparent 17%),
+    radial-gradient(circle at 50% 50%, transparent 0 40%, var(--candy-3) 41% 48%, transparent 49%);
+}
+
+/* 4 · mor sarmal lolipop */
 .c4 {
-  background:
-    radial-gradient(circle at 50% 50%, var(--candy-4b) 15%, transparent 18%),
-    repeating-conic-gradient(from 15deg, var(--candy-4b) 0deg 30deg, var(--candy-4) 30deg 60deg);
+  background: repeating-conic-gradient(
+    from 20deg,
+    var(--candy-4b) 0deg 40deg,
+    var(--candy-4) 40deg 80deg
+  );
 }
+.c4 .cpat {
+  background: radial-gradient(circle at 50% 50%, oklch(1 0 0 / 0.85) 0 13%, transparent 14%);
+}
+
+/* 5 · mavi şeritli şeker */
 .c5 {
-  background:
-    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.3) 0px 8px, transparent 8px 16px),
-    linear-gradient(150deg, var(--candy-5b), var(--candy-5));
+  background: repeating-linear-gradient(
+    118deg,
+    var(--candy-5b) 0 16%,
+    var(--candy-5) 16% 32%
+  );
 }
+.c5 .cpat {
+  background: radial-gradient(circle at 50% 50%, oklch(1 0 0 / 0.6) 0 15%, transparent 16%);
+}
+
+/* ── Temalar ─────────────────────────────────────────────────────── */
+.theme-candy {
+  --scene-bg: linear-gradient(180deg, oklch(0.88 0.09 225), oklch(0.9 0.07 340));
+}
+
+.theme-bonanza {
+  --scene-bg: radial-gradient(circle at 20% 15%, oklch(0.78 0.17 330), transparent 55%),
+    linear-gradient(170deg, oklch(0.62 0.2 300), oklch(0.72 0.19 350) 55%, oklch(0.85 0.14 60));
+  --boardbg: oklch(0.38 0.13 300);
+  --boardcell: oklch(0.46 0.12 300);
+  --panel: oklch(0.88 0.12 330);
+  --panel-foreground: oklch(0.3 0.14 330);
+  --secondary: oklch(0.92 0.08 330);
+  --secondary-foreground: oklch(0.3 0.14 330);
+  --candy-0: oklch(0.72 0.2 350);
+  --candy-0b: oklch(0.95 0.05 350);
+  --candy-1: oklch(0.6 0.26 25);
+  --candy-1b: oklch(0.85 0.16 35);
+  --candy-2: oklch(0.72 0.24 140);
+  --candy-2b: oklch(0.9 0.18 135);
+  --candy-3: oklch(0.86 0.18 92);
+  --candy-3b: oklch(0.95 0.12 100);
+  --candy-4: oklch(0.6 0.27 305);
+  --candy-4b: oklch(0.82 0.18 310);
+  --candy-5: oklch(0.66 0.19 245);
+  --candy-5b: oklch(0.9 0.11 235);
+}
+
+.theme-neon {
+  --scene-bg: radial-gradient(circle at 70% 10%, oklch(0.45 0.2 300), transparent 60%),
+    linear-gradient(180deg, oklch(0.2 0.08 285), oklch(0.16 0.06 265));
+  --foreground: oklch(0.97 0.02 200);
+  --boardbg: oklch(0.24 0.07 280);
+  --boardcell: oklch(0.32 0.07 280);
+  --panel: oklch(0.34 0.12 300);
+  --panel-foreground: oklch(0.97 0.03 200);
+  --secondary: oklch(0.34 0.09 292);
+  --secondary-foreground: oklch(0.97 0.03 200);
+  --gradient-hud: linear-gradient(180deg, oklch(0.42 0.14 300), oklch(0.3 0.12 290));
+  --gradient-gold: linear-gradient(180deg, oklch(0.92 0.2 100), oklch(0.8 0.2 70));
+  --candy-0: oklch(0.72 0.26 350);
+  --candy-0b: oklch(0.9 0.16 340);
+  --candy-1: oklch(0.66 0.29 20);
+  --candy-1b: oklch(0.88 0.18 30);
+  --candy-2: oklch(0.82 0.24 165);
+  --candy-2b: oklch(0.93 0.16 170);
+  --candy-3: oklch(0.9 0.19 100);
+  --candy-3b: oklch(0.97 0.13 105);
+  --candy-4: oklch(0.66 0.28 300);
+  --candy-4b: oklch(0.85 0.18 305);
+  --candy-5: oklch(0.78 0.19 210);
+  --candy-5b: oklch(0.93 0.12 205);
+}
+.theme-neon .candy-base {
+  box-shadow:
+    inset 0 -3px 7px oklch(0 0 0 / 0.35),
+    inset 0 3px 7px oklch(1 0 0 / 0.4),
+    0 0 10px oklch(0.8 0.2 320 / 0.55);
+}
+
+/* Sade tema: şekersiz düz bloklar */
+.theme-plain {
+  --scene-bg: linear-gradient(180deg, oklch(0.28 0.03 255), oklch(0.22 0.02 255));
+  --foreground: oklch(0.96 0.005 250);
+  --boardbg: oklch(0.3 0.02 255);
+  --boardcell: oklch(0.37 0.02 255);
+  --panel: oklch(0.34 0.02 255);
+  --panel-foreground: oklch(0.96 0.005 250);
+  --secondary: oklch(0.41 0.02 255);
+  --secondary-foreground: oklch(0.96 0.005 250);
+  --card: oklch(0.32 0.02 255);
+  --accent-foreground: oklch(0.99 0.005 250);
+  --gold: oklch(0.8 0.11 85);
+  --gradient-hud: linear-gradient(180deg, oklch(0.4 0.02 255), oklch(0.31 0.02 255));
+  --gradient-gold: linear-gradient(180deg, oklch(0.68 0.15 255), oklch(0.55 0.16 260));
+  --shadow-candy: 0 3px 0 oklch(0.15 0.02 255 / 0.6), 0 8px 16px oklch(0.1 0.02 255 / 0.5);
+  --shadow-panel: 0 4px 0 oklch(0.18 0.02 255 / 0.6), 0 12px 24px oklch(0.1 0.02 255 / 0.5);
+  --candy-0: oklch(0.62 0.15 20);
+  --candy-1: oklch(0.66 0.16 45);
+  --candy-2: oklch(0.66 0.13 155);
+  --candy-3: oklch(0.78 0.13 90);
+  --candy-4: oklch(0.6 0.14 290);
+  --candy-5: oklch(0.62 0.15 250);
+}
+.theme-plain .candy-base {
+  border-radius: 20% !important;
+  background: var(--flat) !important;
+  box-shadow:
+    inset 0 -3px 0 oklch(0 0 0 / 0.25),
+    inset 0 3px 0 oklch(1 0 0 / 0.22);
+}
+.theme-plain .cpat,
+.theme-plain .candy-shine::after {
+  display: none;
+}
+.theme-plain .c0 { --flat: var(--candy-0); }
+.theme-plain .c1 { --flat: var(--candy-1); }
+.theme-plain .c2 { --flat: var(--candy-2); }
+.theme-plain .c3 { --flat: var(--candy-3); }
+.theme-plain .c4 { --flat: var(--candy-4); }
+.theme-plain .c5 { --flat: var(--candy-5); }
+.theme-plain .anim-wobble { animation: none; }
+
 
 /* ── Motion ──────────────────────────────────────────────────────── */
 @keyframes pop-in {
@@ -236,3 +385,9 @@
   paint-order: stroke fill;
   text-shadow: 0 4px 0 oklch(0.35 0.12 340 / 0.5);
 }
+
+@keyframes pulse-warn {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.14); opacity: 0.75; }
+}
+.anim-pulse { animation: pulse-warn 0.7s ease-in-out infinite; }
