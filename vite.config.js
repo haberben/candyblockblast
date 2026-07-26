@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import legacy from '@vitejs/plugin-legacy';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -11,6 +12,9 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    legacy({
+      targets: ['chrome >= 44', 'android >= 5.0'],
+    }),
   ],
   resolve: {
     alias: {
@@ -18,7 +22,4 @@ export default defineConfig({
     },
   },
   base: './',
-  build: {
-    target: 'es2015',
-  },
 });
