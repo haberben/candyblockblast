@@ -53,7 +53,7 @@ export function CandyBlockBlast() {
   const [seconds, setSeconds] = useState(60);
 
   const [board, setBoard] = useState<Board>(emptyBoard);
-  const [tray, setTray] = useState<Piece[]>([]);
+  const [tray, setTray] = useState<(Piece | null)[]>([]);
   const [levelIdx, setLevelIdx] = useState(1);
   const level = useMemo(() => makeLevel(levelIdx), [levelIdx]);
   const [score, setScore] = useState(0);
@@ -176,12 +176,12 @@ export function CandyBlockBlast() {
     if (py > r.bottom + 65 || py < r.top - 120) return null;
 
     const activeOffY = getActiveOffY(core, py, r);
-    const gx = Math.round((px - core.offX - (r.left + 6)) / cs);
-    const gy = Math.round((py - activeOffY - (r.top + 6)) / cs);
+    let gx = Math.round((px - core.offX - (r.left + 6)) / cs);
+    let gy = Math.round((py - activeOffY - (r.top + 6)) / cs);
 
-    // Block Blast davranışı: tamamen tahtaya sığmıyorsa hedef yok (snap yok)
-    if (gx < 0 || gy < 0 || gx + core.piece.shape.w > SIZE || gy + core.piece.shape.h > SIZE)
-      return null;
+    // Kelepçeleme (Clamping): Tahtanın kenarlarına yapışarak seri yerleştirmeyi sağlar
+    gx = Math.min(Math.max(gx, 0), SIZE - core.piece.shape.w);
+    gy = Math.min(Math.max(gy, 0), SIZE - core.piece.shape.h);
     return { x: gx, y: gy };
   };
 
@@ -309,8 +309,8 @@ export function CandyBlockBlast() {
     setTimeout(() => setFx((f) => f.filter((p) => !parts.includes(p))), 750);
   };
 
-  const finishMove = (nextBoard: Board, nextTray: Piece[], gainedTarget: number) => {
-    const stuck = !nextTray.some((p) => canPlaceAnywhere(nextBoard, p));
+  const finishMove = (nextBoard: Board, nextTray: (Piece | null)[], gainedTarget: number) => {
+    const stuck = !nextTray.some((p) => p && canPlaceAnywhere(nextBoard, p));
     if (mode === "level") {
       setMoves((m) => {
         const left = m - 1;
@@ -354,8 +354,9 @@ export function CandyBlockBlast() {
     setScore((s) => s + res.gained);
     setCollected((c) => c + (res.collected[level.targetCandy] ?? 0));
 
-    const restTray = tray.filter((_, i) => i !== core.slot);
-    const nextTray = restTray.length === 0 ? newTray() : restTray;
+    const nextTray = tray.map((p, i) => i === core.slot ? null : p);
+    const isTrayEmpty = nextTray.every((p) => p === null);
+    const finalTray = isTrayEmpty ? newTray() : nextTray;
 
     if (res.lines > 0) {
       sfx.blast(res.lines, nextCombo);
@@ -385,13 +386,13 @@ export function CandyBlockBlast() {
       setTimeout(() => {
         setClearing(new Set());
         setBoard(res.board);
-        finishMove(res.board, nextTray, res.collected[level.targetCandy] ?? 0);
+        finishMove(res.board, finalTray, res.collected[level.targetCandy] ?? 0);
       }, 380);
     } else {
       setBoard(res.board);
-      finishMove(res.board, nextTray, 0);
+      finishMove(res.board, finalTray, 0);
     }
-    setTray(nextTray);
+    setTray(finalTray);
   };
 
   const commitRef = useRef(commit);
@@ -609,20 +610,20 @@ export function CandyBlockBlast() {
           className="mt-1 grid grid-cols-3 items-center gap-2 rounded-3xl bg-boardbg p-3"
           style={{ boxShadow: "0 6px 0 oklch(0.3 0.06 265 / 0.4)" }}
         >
-          {[0, 1, 2].map((slot) => {
-            const piece = tray[slot];
-            if (!piece) return <div key={slot} className="h-20" />;
-            const dragging = dragView?.slot === slot;
-            const placeable = canPlaceAnywhere(board, piece);
-            const unit = Math.min(26, 74 / Math.max(piece.shape.w, piece.shape.h));
-            return (
-              <div
-                key={piece.uid}
-                onPointerDown={onPiecePointerDown(piece, slot)}
-                className={`flex h-20 cursor-grab touch-none items-center justify-center rounded-2xl select-none ${
-                  dragging ? "opacity-20" : placeable ? "anim-wobble opacity-100" : "opacity-40"
-                }`}
-              >
+            {[0, 1, 2].map((slot) => {
+              const piece = tray[slot];
+              if (!piece) return <div key={slot} className="h-20" />;
+              const dragging = dragView?.slot === slot;
+              const placeable = canPlaceAnywhere(board, piece);
+              const unit = Math.min(26, 74 / Math.max(piece.shape.w, piece.shape.h));
+              return (
+                <div
+                  key={piece.uid}
+                  onPointerDown={onPiecePointerDown(piece, slot)}
+                  className={`flex h-20 cursor-grab touch-none items-center justify-center rounded-2xl select-none ${
+                    dragging ? "opacity-20" : placeable ? "anim-wobble opacity-100" : "opacity-40"
+                  }`}
+                >
                 <div
                   className="relative"
                   style={{ width: piece.shape.w * unit, height: piece.shape.h * unit }}
