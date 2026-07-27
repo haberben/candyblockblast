@@ -10,6 +10,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
   </head>
   <body>
+    <div id="error-fallback" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); color:#ff3333; padding:20px; font-family:monospace; z-index:999999; overflow:auto; font-size:14px; line-height:1.5;">
+      <h2 style="color:white;margin-top:0;font-family:sans-serif;">Candy Blast Başlatma Hatası</h2>
+      <p style="color:#ccc;">Cihaz uyumsuzluğu veya tarayıcı hatası oluştu. Lütfen bu hatanın ekran görüntüsünü paylaşın:</p>
+      <pre id="error-fallback-text" style="white-space:pre-wrap; word-break:break-all; background:#111; padding:15px; border:1px solid #333; border-radius:8px; color:#ff3333;"></pre>
+    </div>
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        var fallback = document.getElementById('error-fallback');
+        var fallbackText = document.getElementById('error-fallback-text');
+        if (fallback && fallbackText) {
+          fallback.style.display = 'block';
+          fallbackText.textContent = 
+            "Hata: " + message + "\n" +
+            "Dosya: " + source + "\n" +
+            "Satır/Sütun: " + lineno + "/" + colno + "\n" +
+            "Stack Trace:\n" + (error ? error.stack : "yok");
+        }
+        return false;
+      };
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
