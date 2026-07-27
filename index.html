@@ -5,31 +5,49 @@
     <link rel="icon" type="image/jpg" href="./logo.jpg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Candy Block Blast</title>
+    
+    <!-- Bulletproof Global Error Diagnostics Layer (Registered before any other scripts) -->
+    <script>
+      (function() {
+        function showError(message, source, lineno, colno, error) {
+          var fallback = document.getElementById('error-fallback');
+          if (!fallback) {
+            fallback = document.createElement('div');
+            fallback.id = 'error-fallback';
+            fallback.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.98); color:#ff3333; padding:20px; font-family:monospace; z-index:999999; overflow:auto; font-size:13px; line-height:1.5; text-align:left;';
+            fallback.innerHTML = '<h2 style="color:white;margin-top:0;font-family:sans-serif;font-size:20px;">Candy Blast Başlatma Hatası</h2>' +
+              '<p style="color:#ccc;font-size:13px;">Cihaz uyumsuzluğu veya tarayıcı hatası oluştu. Lütfen bu hatanın ekran görüntüsünü geliştiriciye iletin:</p>' +
+              '<pre id="error-fallback-text" style="white-space:pre-wrap; word-break:break-all; background:#111; padding:15px; border:1px solid #333; border-radius:8px; color:#ff3333; font-family:monospace; font-size:12px;"></pre>';
+            document.documentElement.appendChild(fallback);
+          }
+          var fallbackText = document.getElementById('error-fallback-text');
+          if (fallbackText) {
+            var details = "Hata: " + message + "\n" +
+              "Dosya: " + (source || "bilinmiyor") + "\n" +
+              "Satır/Sütun: " + (lineno || 0) + "/" + (colno || 0) + "\n" +
+              "Cihaz Bilgisi: " + (navigator.userAgent || "bilinmiyor") + "\n" +
+              "Ekran/Protokol: " + window.innerWidth + "x" + window.innerHeight + " / " + window.location.protocol + "\n" +
+              "Stack Trace:\n" + (error ? (error.stack || error) : "yok");
+            fallbackText.textContent = details;
+          }
+        }
+        window.onerror = function(message, source, lineno, colno, error) {
+          showError(message, source, lineno, colno, error);
+          return false;
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event.reason;
+          var msg = reason ? (reason.message || reason) : 'Unhandled promise rejection';
+          showError(msg, reason ? reason.fileName : '', reason ? reason.lineNumber : 0, 0, reason);
+        });
+      })();
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
   </head>
   <body>
-    <div id="error-fallback" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); color:#ff3333; padding:20px; font-family:monospace; z-index:999999; overflow:auto; font-size:14px; line-height:1.5;">
-      <h2 style="color:white;margin-top:0;font-family:sans-serif;">Candy Blast Başlatma Hatası</h2>
-      <p style="color:#ccc;">Cihaz uyumsuzluğu veya tarayıcı hatası oluştu. Lütfen bu hatanın ekran görüntüsünü paylaşın:</p>
-      <pre id="error-fallback-text" style="white-space:pre-wrap; word-break:break-all; background:#111; padding:15px; border:1px solid #333; border-radius:8px; color:#ff3333;"></pre>
-    </div>
-    <script>
-      window.onerror = function(message, source, lineno, colno, error) {
-        var fallback = document.getElementById('error-fallback');
-        var fallbackText = document.getElementById('error-fallback-text');
-        if (fallback && fallbackText) {
-          fallback.style.display = 'block';
-          fallbackText.textContent = 
-            "Hata: " + message + "\n" +
-            "Dosya: " + source + "\n" +
-            "Satır/Sütun: " + lineno + "/" + colno + "\n" +
-            "Stack Trace:\n" + (error ? error.stack : "yok");
-        }
-        return false;
-      };
-    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
