@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from "react";
 import { Music, Music2, Home, RotateCcw, Volume2, VolumeX } from "lucide-react";
 
 import bgImage from "@/assets/candy-bg.jpg";
@@ -242,9 +242,24 @@ export function CandyBlockBlast() {
       pendingRef.current = { x: e.clientX, y: e.clientY };
       if (rafRef.current === null) rafRef.current = requestAnimationFrame(flush);
     };
-    const up = () => {
+    const up = (e: PointerEvent) => {
       const core = coreRef.current;
-      const view = viewRef.current;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (core) {
+        // En son parmak koordinatına göre hücreyi ve geçerliliği senkron olarak hesapla (bırakma anında gecikmesiz yerleşmesi için)
+        const finalCell = computeCell(core, e.clientX, e.clientY);
+        const finalValid = finalCell ? canPlaceAt(boardStateRef.current, core.piece, finalCell.x, finalCell.y) : false;
+        const view = { piece: core.piece, slot: core.slot, cell: finalValid ? finalCell : null, valid: finalValid };
+        commitRef.current(core, view);
+      }
+      coreRef.current = null;
+      viewRef.current = null;
+      setDragView(null);
+    };
+    const cancel = () => {
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -252,15 +267,15 @@ export function CandyBlockBlast() {
       coreRef.current = null;
       viewRef.current = null;
       setDragView(null);
-      if (core && view) commitRef.current(core, view);
+      sfx.invalid();
     };
     window.addEventListener("pointermove", move, { passive: false });
     window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
+    window.addEventListener("pointercancel", cancel);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("pointercancel", cancel);
     };
   }, []);
 
@@ -485,34 +500,18 @@ export function CandyBlockBlast() {
               contain: "layout paint",
             }}
           >
-            {board.map((cell, i) => {
-              const isGhost = ghostCells.has(i);
-              const isClearing = clearing.has(i);
-              return (
-                <div
-                  key={i}
-                  onClick={armed ? () => firePower(i) : undefined}
-                  className={`relative rounded-[22%] bg-boardcell/70 ${armed ? "cursor-pointer" : ""}`}
-                  style={
-                    isGhost && cell === null
-                      ? { outline: "2px solid var(--gold)", outlineOffset: "-1px" }
-                      : armed
-                        ? { outline: "1px dashed var(--gold)", outlineOffset: "-1px" }
-                        : undefined
-                  }
-                >
-                  {cell !== null && (
-                    <Candy
-                      id={cell}
-                      className={`absolute inset-[6%] ${isClearing ? "anim-blast" : "anim-pop"}`}
-                    />
-                  )}
-                  {cell === null && isGhost && dragView && (
-                    <Candy id={dragView.piece.candy} className="absolute inset-[10%] opacity-40" />
-                  )}
-                </div>
-              );
-            })}
+            {board.map((cell, i) => (
+              <BoardCell
+                key={i}
+                index={i}
+                cell={cell}
+                isGhost={ghostCells.has(i)}
+                isClearing={clearing.has(i)}
+                isArmed={armed !== null}
+                onClick={armed ? () => firePower(i) : undefined}
+                dragPieceCandy={dragView?.piece.candy}
+              />
+            ))}
 
             <div className="pointer-events-none absolute inset-0 overflow-visible">
               {fx.map((p) => (
@@ -802,6 +801,49 @@ export function CandyBlockBlast() {
     </div>
   );
 }
+
+type BoardCellProps = {
+  index: number;
+  cell: CandyId | null;
+  isGhost: boolean;
+  isClearing: boolean;
+  isArmed: boolean;
+  onClick?: () => void;
+  dragPieceCandy?: CandyId;
+};
+
+const BoardCell = memo(({
+  cell,
+  isGhost,
+  isClearing,
+  isArmed,
+  onClick,
+  dragPieceCandy,
+}: BoardCellProps) => {
+  return (
+    <div
+      onClick={onClick}
+      className={`relative rounded-[22%] bg-boardcell/70 ${isArmed ? "cursor-pointer" : ""}`}
+      style={
+        isGhost && cell === null
+          ? { outline: "2px solid var(--gold)", outlineOffset: "-1px" }
+          : isArmed
+            ? { outline: "1px dashed var(--gold)", outlineOffset: "-1px" }
+            : undefined
+      }
+    >
+      {cell !== null && (
+        <Candy
+          id={cell}
+          className={`absolute inset-[6%] ${isClearing ? "anim-blast" : "anim-pop"}`}
+        />
+      )}
+      {cell === null && isGhost && dragPieceCandy !== undefined && (
+        <Candy id={dragPieceCandy} className="absolute inset-[10%] opacity-40" />
+      )}
+    </div>
+  );
+});
 
 function MusicSync({ on }: { on: boolean }) {
   useEffect(() => {
