@@ -155,3 +155,58 @@ export function placePiece(
 
   return { board: next, clearedRows, clearedCols, clearedIndices, collected, gained, lines };
 }
+
+/* ── Power-ups (özel lolipoplar) ─────────────────────────────────── */
+
+export type PowerKind = "rowbomb" | "colbomb" | "blast3";
+
+export type PowerDef = {
+  kind: PowerKind;
+  name: string;
+  hint: string;
+  from: CandyId;
+  need: number;
+};
+
+/** Tek bir patlamada aynı renkten `need` şeker toplanınca özel lolipop kazanılır. */
+export const POWERS: PowerDef[] = [
+  { kind: "blast3", name: "Kırmızı Bomba", hint: "3x3 çevreyi patlatır", from: 1, need: 5 },
+  { kind: "rowbomb", name: "Yeşil Çizgili", hint: "Tüm satırı süpürür", from: 2, need: 5 },
+  { kind: "colbomb", name: "Sarı Çizgili", hint: "Tüm sütunu süpürür", from: 3, need: 5 },
+];
+
+export function powersEarned(collected: Record<number, number>): PowerKind[] {
+  return POWERS.filter((p) => (collected[p.from] ?? 0) >= p.need).map((p) => p.kind);
+}
+
+export type PowerResult = {
+  board: Board;
+  clearedIndices: number[];
+  collected: Record<number, number>;
+  gained: number;
+};
+
+/** Özel lolipopu tahtadaki bir hücreye uygular. */
+export function applyPower(board: Board, kind: PowerKind, cx: number, cy: number): PowerResult {
+  const idx = new Set<number>();
+  if (kind === "rowbomb") for (let c = 0; c < SIZE; c++) idx.add(cy * SIZE + c);
+  if (kind === "colbomb") for (let r = 0; r < SIZE; r++) idx.add(r * SIZE + cx);
+  if (kind === "blast3")
+    for (let y = cy - 1; y <= cy + 1; y++)
+      for (let x = cx - 1; x <= cx + 1; x++)
+        if (x >= 0 && y >= 0 && x < SIZE && y < SIZE) idx.add(y * SIZE + x);
+
+  const next = board.slice();
+  const collected: Record<number, number> = {};
+  const clearedIndices: number[] = [];
+  idx.forEach((i) => {
+    const v = next[i];
+    if (v !== null) {
+      collected[v] = (collected[v] ?? 0) + 1;
+      clearedIndices.push(i);
+      next[i] = null;
+    }
+  });
+
+  return { board: next, clearedIndices, collected, gained: clearedIndices.length * 40 + 120 };
+}

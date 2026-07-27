@@ -1,9 +1,8 @@
-import React from "react";
 import { Candy } from "./Candy";
 import type { CandyId } from "@/lib/game";
 import type { Mode } from "@/lib/modes";
 
-export const Hud = React.memo(function Hud({
+export function Hud({
   mode,
   score,
   best,
@@ -97,4 +96,4 @@ export const Hud = React.memo(function Hud({
       </div>
     </div>
   );
-})
+}

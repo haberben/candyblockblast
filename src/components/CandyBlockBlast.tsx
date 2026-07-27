@@ -6,15 +6,19 @@ import { Candy } from "./Candy";
 import { Hud } from "./Hud";
 import {
   SIZE,
+  POWERS,
+  applyPower,
   canPlaceAnywhere,
   canPlaceAt,
   emptyBoard,
   makeLevel,
   newTray,
   placePiece,
+  powersEarned,
   type Board,
   type CandyId,
   type Piece,
+  type PowerKind,
 } from "@/lib/game";
 import { MODES, TIME_OPTIONS, readBest, writeBest, type Mode } from "@/lib/modes";
 import { THEMES, THEME_KEY, getTheme, type ThemeId } from "@/lib/themes";
@@ -33,8 +37,8 @@ type DragCore = {
 type DragView = { piece: Piece; slot: number; cell: { x: number; y: number } | null; valid: boolean };
 
 const getActiveOffY = (core: DragCore, py: number, r: DOMRect) => {
-  const maxOffY = core.piece.shape.h * core.cellSize + 175; // 3.5x dikey ofset (yukarıda süzülmesi için)
-  const minOffY = (core.piece.shape.h * core.cellSize) / 2; // Parmağın altına inmesi için (tepside sıfırlanır)
+  const maxOffY = core.piece.shape.h * core.cellSize + 175; // 3.5x dikey ofset (parmağın üstünde)
+  const minOffY = (core.piece.shape.h * core.cellSize) / 2; // Parmağın altına hizalanma (tepside)
   const ratio = Math.min(1, Math.max(0, (py - r.bottom) / 80));
   return maxOffY - ratio * (maxOffY - minOffY);
 };
@@ -65,6 +69,8 @@ export function CandyBlockBlast() {
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
   const [screen, setScreen] = useState<"menu" | "game">("menu");
+  const [powers, setPowers] = useState<PowerKind[]>([]);
+  const [armed, setArmed] = useState<PowerKind | null>(null);
 
   const boardRef = useRef<HTMLDivElement | null>(null);
   const floatRef = useRef<HTMLDivElement | null>(null);
@@ -140,6 +146,8 @@ export function CandyBlockBlast() {
       setTimeLeft(secs);
       setClearing(new Set());
       setStatus("playing");
+      setPowers([]);
+      setArmed(null);
       if (!keepScore) setScore(0);
     },
     [],
@@ -163,17 +171,17 @@ export function CandyBlockBlast() {
     const r = rectRef.current;
     if (!r) return null;
     const cs = core.cellSize;
-    
+
     // Parmak tepsinin ortasından aşağıya indiğinde yerleşimi iptal et (tahtaya snap olmasın)
     if (py > r.bottom + 65 || py < r.top - 120) return null;
-    
+
     const activeOffY = getActiveOffY(core, py, r);
-    let gx = Math.round((px - core.offX - (r.left + 6)) / cs);
-    let gy = Math.round((py - activeOffY - (r.top + 6)) / cs);
-    
-    // Izgara sınırlarına kelepçele (böylece parmak tepsideyken bile en alta oturur)
-    gx = Math.min(Math.max(gx, 0), SIZE - core.piece.shape.w);
-    gy = Math.min(Math.max(gy, 0), SIZE - core.piece.shape.h);
+    const gx = Math.round((px - core.offX - (r.left + 6)) / cs);
+    const gy = Math.round((py - activeOffY - (r.top + 6)) / cs);
+
+    // Block Blast davranışı: tamamen tahtaya sığmıyorsa hedef yok (snap yok)
+    if (gx < 0 || gy < 0 || gx + core.piece.shape.w > SIZE || gy + core.piece.shape.h > SIZE)
+      return null;
     return { x: gx, y: gy };
   };
 
@@ -187,20 +195,16 @@ export function CandyBlockBlast() {
     if (floatRef.current) {
       const r = rectRef.current;
       const activeOffY = r ? getActiveOffY(core, p.y, r) : core.offY;
-      // snap the floating piece onto the highlighted cells (mobile-game feel)
-      const tx = cell && r ? r.left + 6 + cell.x * core.cellSize : p.x - core.offX;
-      const ty = cell && r ? r.top + 6 + cell.y * core.cellSize : p.y - activeOffY;
+      // sadece geçerli hedefte hücreye otur; dolu/dışarıda ise parmağı takip et
+      const tx = valid && cell && r ? r.left + 6 + cell.x * core.cellSize : p.x - core.offX;
+      const ty = valid && cell && r ? r.top + 6 + cell.y * core.cellSize : p.y - activeOffY;
       floatRef.current.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+      floatRef.current.style.opacity = valid ? "1" : "0.85";
     }
     const prev = viewRef.current;
-    if (
-      !prev ||
-      prev.valid !== valid ||
-      prev.cell?.x !== cell?.x ||
-      prev.cell?.y !== cell?.y ||
-      (!prev.cell) !== (!cell)
-    ) {
-      const next = { piece: core.piece, slot: core.slot, cell, valid };
+    const nextCell = valid ? cell : null;
+    if (!prev || prev.valid !== valid || prev.cell?.x !== nextCell?.x || prev.cell?.y !== nextCell?.y) {
+      const next = { piece: core.piece, slot: core.slot, cell: nextCell, valid };
       viewRef.current = next;
       setDragView(next);
     }
@@ -215,8 +219,7 @@ export function CandyBlockBlast() {
     if (!el) return;
     const r = el.getBoundingClientRect();
     rectRef.current = r;
-    const cs = (r.width - 9) / SIZE; // cell pitch incl. 3px gap
-    // grab point: center of piece horizontally, lifted above the finger
+    const cs = (r.width - 9) / SIZE;
     const core: DragCore = {
       piece,
       slot,
@@ -259,7 +262,6 @@ export function CandyBlockBlast() {
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useLayoutEffect(() => {
@@ -267,8 +269,12 @@ export function CandyBlockBlast() {
       const p = pendingRef.current;
       const c = coreRef.current;
       const r = rectRef.current;
+      const cell = dragView.valid ? dragView.cell : null;
       const activeOffY = r ? getActiveOffY(c, p.y, r) : c.offY;
-      floatRef.current.style.transform = `translate3d(${p.x - c.offX}px, ${p.y - activeOffY}px, 0)`;
+      const tx = cell && r ? r.left + 6 + cell.x * c.cellSize : p.x - c.offX;
+      const ty = cell && r ? r.top + 6 + cell.y * c.cellSize : p.y - activeOffY;
+      floatRef.current.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+      floatRef.current.style.opacity = dragView.valid ? "1" : "0.85";
     }
   }, [dragView]);
 
@@ -277,14 +283,18 @@ export function CandyBlockBlast() {
     if (!el) return;
     const r = el.getBoundingClientRect();
     const cs = r.width / SIZE;
+    const lowEnd =
+      typeof navigator !== "undefined" &&
+      ((navigator.hardwareConcurrency ?? 4) <= 4 ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const perCell = lowEnd ? 1 : 2;
+    const maxCells = lowEnd ? 8 : 20;
     const parts: Fx[] = [];
-    // Eski GPU'larda (J5 gibi) kasılmayı önlemek için parçacık üretilen hücre sayısını 8 ile sınırla
-    indices.slice(0, 8).forEach((i) => {
+    indices.slice(0, maxCells).forEach((i) => {
       const cx = (i % SIZE) * cs + cs / 2;
       const cy = Math.floor(i / SIZE) * cs + cs / 2;
       const candy = (b[i] ?? 0) as CandyId;
-      // Hücre başına 3 yerine 2 parçacık üreterek döngüyü rahatlat
-      for (let k = 0; k < 2; k++) {
+      for (let k = 0; k < perCell; k++) {
         parts.push({
           id: ++fxSeq,
           x: cx,
@@ -361,6 +371,17 @@ export function CandyBlockBlast() {
       } else {
         pushToast("BLAST!", `+${res.gained.toLocaleString("tr-TR")}`);
       }
+
+      const earned = powersEarned(res.collected);
+      if (earned.length > 0) {
+        setPowers((p) => [...p, ...earned].slice(0, 5));
+        setTimeout(() => {
+          sfx.powerGain();
+          const def = POWERS.find((d) => d.kind === earned[0])!;
+          pushToast("ÖZEL LOLİPOP!", def.name);
+        }, 420);
+      }
+
       setTimeout(() => {
         setClearing(new Set());
         setBoard(res.board);
@@ -372,11 +393,38 @@ export function CandyBlockBlast() {
     }
     setTray(nextTray);
   };
+
   const commitRef = useRef(commit);
   commitRef.current = commit;
 
+  const firePower = (index: number) => {
+    if (!armed || status !== "playing") return;
+    const b = boardStateRef.current;
+    const res = applyPower(b, armed, index % SIZE, Math.floor(index / SIZE));
+    if (res.clearedIndices.length === 0) {
+      sfx.invalid();
+      return;
+    }
+    const def = POWERS.find((d) => d.kind === armed)!;
+    sfx.powerBlast();
+    setClearing(new Set(res.clearedIndices));
+    spawnSparkles(res.clearedIndices, b);
+    setScore((s) => s + res.gained);
+    setCollected((c) => c + (res.collected[level.targetCandy] ?? 0));
+    pushToast(def.name.toLocaleUpperCase("tr-TR"), `+${res.gained.toLocaleString("tr-TR")}`);
+    setPowers((p) => {
+      const i = p.indexOf(armed);
+      return i === -1 ? p : [...p.slice(0, i), ...p.slice(i + 1)];
+    });
+    setArmed(null);
+    setTimeout(() => {
+      setClearing(new Set());
+      setBoard(res.board);
+    }, 380);
+  };
+
   const ghostCells = useMemo(() => {
-    if (!dragView?.cell || !dragView.valid) return new Set<number>();
+    if (!dragView?.cell) return new Set<number>();
     const s = new Set<number>();
     dragView.piece.shape.cells.forEach(([x, y]) => {
       const gx = dragView.cell!.x + x;
@@ -433,6 +481,7 @@ export function CandyBlockBlast() {
             className="relative grid aspect-square w-full touch-none grid-cols-8 gap-[3px] rounded-3xl bg-boardbg p-[6px]"
             style={{
               boxShadow: "0 8px 0 oklch(0.3 0.06 265 / 0.5), 0 16px 32px oklch(0.2 0.05 280 / 0.35)",
+              contain: "layout paint",
             }}
           >
             {board.map((cell, i) => {
@@ -441,14 +490,14 @@ export function CandyBlockBlast() {
               return (
                 <div
                   key={i}
-                  className="relative rounded-[22%] bg-boardcell/70"
+                  onClick={armed ? () => firePower(i) : undefined}
+                  className={`relative rounded-[22%] bg-boardcell/70 ${armed ? "cursor-pointer" : ""}`}
                   style={
-                    isGhost
-                      ? {
-                          outline: `2px solid ${dragView?.valid ? "var(--gold)" : "var(--destructive)"}`,
-                          outlineOffset: "-1px",
-                        }
-                      : undefined
+                    isGhost && cell === null
+                      ? { outline: "2px solid var(--gold)", outlineOffset: "-1px" }
+                      : armed
+                        ? { outline: "1px dashed var(--gold)", outlineOffset: "-1px" }
+                        : undefined
                   }
                 >
                   {cell !== null && (
@@ -503,6 +552,58 @@ export function CandyBlockBlast() {
           </div>
         </div>
 
+        {/* Power-up bar */}
+        <div className="flex min-h-11 items-center justify-center gap-2">
+          {powers.length === 0 ? (
+            <p className="font-display text-[11px] font-bold text-panel-foreground/70">
+              Aynı renkten 5+ şeker patlat → özel lolipop kazan!
+            </p>
+          ) : (
+            powers.map((kind, i) => {
+              const def = POWERS.find((d) => d.kind === kind)!;
+              const isArmed = armed === kind;
+              return (
+                <button
+                  key={`${kind}-${i}`}
+                  type="button"
+                  onClick={() => setArmed(isArmed ? null : kind)}
+                  title={`${def.name} · ${def.hint}`}
+                  className={`relative flex size-11 items-center justify-center rounded-2xl bg-panel transition-transform active:scale-95 ${
+                    isArmed ? "anim-pulse ring-2 ring-[var(--gold)]" : ""
+                  }`}
+                  style={{ boxShadow: "0 4px 0 oklch(0.3 0.06 265 / 0.45)" }}
+                >
+                  <Candy id={def.from} className="size-8" />
+                  <span
+                    className="pointer-events-none absolute inset-0 m-auto"
+                    style={
+                      kind === "rowbomb"
+                        ? {
+                            top: "50%",
+                            height: 3,
+                            background: "oklch(1 0 0 / 0.9)",
+                            borderRadius: 9999,
+                          }
+                        : kind === "colbomb"
+                          ? {
+                              left: "50%",
+                              width: 3,
+                              background: "oklch(1 0 0 / 0.9)",
+                              borderRadius: 9999,
+                            }
+                          : {
+                              inset: "28%",
+                              border: "2px dashed oklch(1 0 0 / 0.85)",
+                              borderRadius: 9999,
+                            }
+                    }
+                  />
+                </button>
+              );
+            })
+          )}
+        </div>
+
         {/* Tray */}
         <div
           className="mt-1 grid grid-cols-3 items-center gap-2 rounded-3xl bg-boardbg p-3"
@@ -549,7 +650,7 @@ export function CandyBlockBlast() {
       {dragView && (
         <div
           ref={floatRef}
-          className="pointer-events-none fixed top-0 left-0 z-50 will-change-transform opacity-80"
+          className="pointer-events-none fixed top-0 left-0 z-50 will-change-transform"
           style={{
             width: dragView.piece.shape.w * dragCell,
             height: dragView.piece.shape.h * dragCell,
@@ -571,7 +672,7 @@ export function CandyBlockBlast() {
         </div>
       )}
 
-      {/* Menu / overlays */}
+      {/* Menu / overlays (backdrop blur replaced with flat bg overlay for older GPUs) */}
       {screen === "menu" && (
         <Overlay>
           <Title />

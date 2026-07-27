@@ -1,7 +1,8 @@
-import React from "react";
+import { memo } from "react";
+
 import type { CandyId } from "@/lib/game";
 
-export const Candy = React.memo(function Candy({
+function CandyImpl({
   id,
   size,
   className = "",
@@ -21,4 +22,6 @@ export const Candy = React.memo(function Candy({
       <span className="cpat" />
     </div>
   );
-});
+}
+
+export const Candy = memo(CandyImpl);

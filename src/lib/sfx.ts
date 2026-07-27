@@ -162,6 +162,20 @@ export const sfx = {
     shimmer(0.9, 0.2, 0.1);
     [65.41, 98, 130.81].forEach((f, i) => pluck(f, 0.4, "sine", 0.22, i * 0.09));
   },
+  /** Özel lolipop kazanıldı. */
+  powerGain() {
+    if (!audioState.sfx) return;
+    [659.25, 987.77, 1318.5, 1975.53].forEach((f, i) => bell(f, 0.7, 0.24, i * 0.06));
+    shimmer(0.7, 0.18, 0.05);
+  },
+  /** Özel lolipop patladı. */
+  powerBlast() {
+    if (!audioState.sfx) return;
+    pluck(82.41, 0.5, "sine", 0.28);
+    pluck(58, 0.6, "triangle", 0.2, 0.02);
+    [1318.5, 1046.5, 1567.98, 2093].forEach((f, i) => bell(f, 0.5, 0.2, i * 0.045));
+    shimmer(0.8, 0.22);
+  },
   levelUp() {
     if (!audioState.sfx) return;
     [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98].forEach((f, i) =>
@@ -169,6 +183,7 @@ export const sfx = {
     );
     shimmer(1.1, 0.22, 0.2);
   },
+
   tick() {
     if (!audioState.sfx) return;
     bell(1760, 0.12, 0.12);
